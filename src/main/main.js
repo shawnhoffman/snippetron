@@ -394,11 +394,14 @@ function showSearchWindow() {
 
 // ─── Tray
 function createTray() {
-  // Use tray icon from assets if available, otherwise fall back to text
   const trayIconPath = path.join(__dirname, '..', '..', 'assets', 'tray-icon.png');
   let icon;
   if (fs.existsSync(trayIconPath)) {
-    icon = nativeImage.createFromPath(trayIconPath);
+    // Load as @2x (44px physical = 22pt logical) so it's the right size on Retina
+    const raw = nativeImage.createFromPath(trayIconPath);
+    icon = nativeImage.createEmpty();
+    icon.addRepresentation({ scaleFactor: 2.0, buffer: raw.toPNG(), width: 22, height: 22 });
+    icon.setTemplateImage(true); // auto-tints black/white for light & dark menu bar
   } else {
     icon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
     tray = new Tray(icon);
