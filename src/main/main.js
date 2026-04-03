@@ -399,7 +399,6 @@ function createTray() {
   let icon;
   if (fs.existsSync(trayIconPath)) {
     icon = nativeImage.createFromPath(trayIconPath);
-    icon.setTemplateImage(true); // auto light/dark tinting on macOS
   } else {
     icon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
     tray = new Tray(icon);
