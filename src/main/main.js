@@ -394,14 +394,12 @@ function showSearchWindow() {
 
 // ─── Tray
 function createTray() {
-  const trayIconPath = path.join(__dirname, '..', '..', 'assets', 'tray-icon.png');
+  // "Template" in filename → Electron auto-sets template mode (macOS light/dark tinting)
+  // "@2x" variant auto-discovered → correct Retina scaling (44px shown at 22pt)
+  const trayIconPath = path.join(__dirname, '..', '..', 'assets', 'tray-iconTemplate.png');
   let icon;
   if (fs.existsSync(trayIconPath)) {
-    // Load as @2x (44px physical = 22pt logical) so it's the right size on Retina
-    const raw = nativeImage.createFromPath(trayIconPath);
-    icon = nativeImage.createEmpty();
-    icon.addRepresentation({ scaleFactor: 2.0, buffer: raw.toPNG(), width: 22, height: 22 });
-    icon.setTemplateImage(true); // auto-tints black/white for light & dark menu bar
+    icon = nativeImage.createFromPath(trayIconPath);
   } else {
     icon = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
     tray = new Tray(icon);
