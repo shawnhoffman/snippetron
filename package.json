@@ -1,0 +1,46 @@
+{
+  "name": "snippetron",
+  "version": "1.0.0",
+  "description": "Rich text snippet expander for macOS",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --mac",
+    "release": "electron-builder --mac --publish always"
+  },
+  "dependencies": {
+    "electron": "^28.0.0",
+    "electron-updater": "^6.1.7",
+    "uiohook-napi": "^1.5.3"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.9.1",
+    "electron-reload": "^2.0.0-alpha.1"
+  },
+  "build": {
+    "appId": "com.snippetron.app",
+    "productName": "Snippetron",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.png",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ]
+    },
+    "dmg": {
+      "title": "Install Snippetron"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "shawnhoffman",
+      "repo": "snippetron"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "!src/**/*.map"
+    ]
+  }
+}

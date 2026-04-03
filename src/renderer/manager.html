@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snippetron</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a1f;
+    --surface: #22222a;
+    --surface2: #2a2a35;
+    --border: rgba(255,255,255,0.07);
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --text: #e8e8f0;
+    --text2: #8888a0;
+    --text3: #5a5a70;
+    --danger: #f87171;
+    --success: #4ade80;
+    --radius: 10px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: transparent;
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-app-region: no-drag;
+  }
+
+  #app {
+    display: flex;
+    height: 100vh;
+    background: var(--bg);
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 240px;
+    min-width: 240px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: rgba(255,255,255,0.02);
+  }
+
+  #titlebar {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px 0 80px;
+    -webkit-app-region: drag;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #titlebar h1 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--text2);
+    text-transform: uppercase;
+  }
+
+  #search-box {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #search-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  #search-input:focus { border-color: var(--accent); }
+  #search-input::placeholder { color: var(--text3); }
+
+  #snippet-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+
+  #snippet-list::-webkit-scrollbar { width: 4px; }
+  #snippet-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .snippet-item {
+    padding: 9px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border: 1px solid transparent;
+  }
+
+  .snippet-item:hover { background: var(--surface); }
+  .snippet-item.active { background: var(--surface2); border-color: var(--accent); }
+  .snippet-item.kb-selected:not(.active) { background: var(--surface); }
+
+  .snippet-item .shortcut {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--accent2);
+    margin-bottom: 2px;
+  }
+
+  .snippet-item .name {
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .snippet-item { position: relative; }
+  .snippet-item.copied::after {
+    content: '✓ copied';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--success);
+    animation: fade-out 1.4s ease forwards;
+  }
+  @keyframes fade-out {
+    0%   { opacity: 1; }
+    60%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .snippet-item .use-hint {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    opacity: 0;
+    transition: opacity 0.1s;
+    pointer-events: none;
+  }
+  .snippet-item:hover .use-hint,
+  .snippet-item.kb-selected .use-hint { opacity: 1; }
+
+  #search-hint {
+    font-size: 10px;
+    color: var(--text3);
+    padding: 4px 4px 0;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  #new-btn {
+    margin: 10px;
+    padding: 9px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  #new-btn:hover { opacity: 0.85; }
+
+  /* ── Main content ── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #main-header {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    -webkit-app-region: drag;
+  }
+
+  #main-header .actions {
+    display: flex;
+    gap: 8px;
+    -webkit-app-region: no-drag;
+  }
+
+  .btn {
+    padding: 6px 14px;
+    border-radius: 7px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--surface); color: var(--text); }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid transparent; }
+  .btn-danger:hover { background: rgba(248,113,113,0.1); border-color: var(--danger); }
+
+  #editor-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Empty state / stats */
+  #empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    color: var(--text3);
+    padding: 32px;
+  }
+
+  #empty-state .icon { font-size: 32px; opacity: 0.3; }
+  #empty-state > p { font-size: 13px; }
+
+  #stats-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .stats-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .stat-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .stat-card .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-card .stat-label {
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .stat-table {
+    width: 100%;
+    max-width: 320px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 0;
+  }
+
+  .stat-table-header {
+    display: flex;
+    align-items: center;
+    padding: 7px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-table-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .stat-table-row:last-child { border-bottom: none; }
+  .stat-table-row:hover { background: rgba(255,255,255,0.03); }
+
+  .stat-row-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stat-row-shortcut {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    flex-shrink: 0;
+  }
+
+  .stat-row-count {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    flex-shrink: 0;
+    min-width: 32px;
+    text-align: right;
+    color: var(--accent2);
+  }
+
+  .stat-row-count.zero { color: var(--text3); }
+
+  .stat-table-empty {
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--text3);
+    text-align: center;
+  }
+
+  .hotkey-warning {
+    font-size: 11px;
+    color: #f4645f;
+    margin-top: 3px;
+  }
+
+  .space-key-btn {
+    margin-top: 5px;
+    font-size: 11px;
+    padding: 2px 9px;
+    background: rgba(124,106,247,0.12);
+    border: 1px solid rgba(124,106,247,0.4);
+    border-radius: 4px;
+    color: var(--accent2);
+    cursor: pointer;
+    display: none;
+  }
+  .space-key-btn:hover { background: rgba(124,106,247,0.22); }
+
+  /* Form */
+  #editor-form {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  #editor-form::-webkit-scrollbar { width: 4px; }
+  #editor-form::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .field { margin-bottom: 20px; }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    margin-bottom: 7px;
+  }
+
+  .field .hint {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 5px;
+  }
+
+  .field input[type="text"] {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input[type="text"]:focus { border-color: var(--accent); }
+
+  .field input.name-input {
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* Rich text toolbar */
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-btn {
+    width: 30px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.1s;
+  }
+
+  .toolbar-btn:hover { background: var(--surface2); color: var(--text); }
+  .toolbar-btn.active { background: var(--accent); color: white; }
+
+  .toolbar-sep {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+
+  .link-btn { width: auto; padding: 0 8px; font-size: 12px; }
+
+  #editor {
+    min-height: 220px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 0 8px 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 14px;
+    outline: none;
+    overflow-y: auto;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  #editor:focus { border-color: var(--accent); }
+
+  #editor a { color: #5b9cf6; text-decoration: underline; }
+
+  #editor ul, #editor ol { padding-left: 20px; }
+
+  #editor blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 4px 0;
+    padding-left: 12px;
+    color: var(--text2);
+  }
+
+  .merge-chip {
+    display: inline-block;
+    background: rgba(124,106,247,0.2);
+    color: var(--accent2);
+    border: 1px solid rgba(124,106,247,0.4);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    cursor: default;
+  }
+
+  /* Bottom bar */
+  #bottom-bar {
+    padding: 12px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  #bottom-bar .meta {
+    font-size: 12px;
+    color: var(--text3);
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+  }
+
+  .tab {
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    margin-bottom: -1px;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+
+  /* Prefs panel */
+  #prefs-panel {
+    padding: 24px;
+    max-width: 540px;
+  }
+
+  #prefs-panel h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    color: var(--text);
+  }
+
+  .pref-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 16px;
+  }
+
+  .pref-row .pref-label { font-size: 14px; color: var(--text); }
+  .pref-row .pref-desc { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+  .pref-row.editing {
+    background: rgba(124,106,247,0.07);
+    border-radius: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin: 0 -10px;
+    border-bottom-color: transparent;
+    outline: 1px solid rgba(124,106,247,0.25);
+  }
+
+  .pref-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    color: var(--text2);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .pref-row input.pref-input {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    padding: 5px 10px;
+    outline: none;
+    text-align: center;
+    width: 80px;
+    display: none;
+    transition: border-color 0.15s;
+  }
+
+  .pref-row input.pref-input.hotkey-input {
+    width: 130px;
+    cursor: default;
+    caret-color: transparent;
+  }
+
+  .pref-row input.pref-input.hotkey-input:focus {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 2px rgba(124,106,247,0.2);
+  }
+
+  .pref-row input.pref-input::placeholder { color: var(--text3); font-size: 12px; }
+
+  #prefs-bottom-bar {
+    padding: 12px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: auto;
+  }
+
+  .import-export-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transform: translateY(6px);
+    transition: all 0.2s;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: var(--success); color: var(--success); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  #view-snippets { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+  #view-prefs { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  /* Link dialog */
+  #link-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+  }
+  #link-dialog {
+    position: fixed;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    z-index: 1001;
+    width: 300px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  #link-dialog label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  #link-dialog input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #link-dialog input:focus { border-color: var(--accent); }
+  #link-dialog .dialog-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    justify-content: flex-end;
+  }
+  #link-dialog .btn-unlink {
+    margin-right: auto;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid transparent;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #link-dialog .btn-unlink:hover { background: rgba(248,113,113,0.1); border-color: var(--danger); }
+
+  /* Merge field dialog — reuses link-dialog layout */
+  #merge-dialog {
+    position: fixed;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    z-index: 1001;
+    width: 280px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: none;
+  }
+  #merge-dialog label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  #merge-dialog .hint {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 5px;
+  }
+  #merge-dialog input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #merge-dialog input:focus { border-color: var(--accent); }
+  #merge-dialog .dialog-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    justify-content: flex-end;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="titlebar"><h1>Snippetron</h1></div>
+    <div id="search-box">
+      <input id="search-input" type="text" placeholder="Search snippets…">
+      <div id="search-hint">↵ use &nbsp;·&nbsp; click to edit</div>
+    </div>
+    <div id="snippet-list"></div>
+    <button id="new-btn">+ New Snippet</button>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="main-header">
+      <div></div>
+      <div class="actions" id="header-actions"></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="snippets">Snippets</div>
+      <div class="tab" data-tab="prefs">Preferences</div>
+    </div>
+
+    <!-- Snippets tab -->
+    <div id="view-snippets">
+      <div id="editor-area">
+        <div id="empty-state">
+          <div class="icon">✦</div>
+          <div id="stats-panel">
+            <div class="stats-row">
+              <div class="stat-card">
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-label">Snippets</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat-uses">0</div>
+                <div class="stat-label">Total uses</div>
+              </div>
+            </div>
+            <div class="stat-table" id="stat-table"></div>
+          </div>
+          <p>Select a snippet or create a new one</p>
+        </div>
+
+        <div id="editor-form" style="display:none">
+          <div class="field">
+            <label>Name</label>
+            <input type="text" id="field-name" class="name-input" placeholder="e.g. Sales Follow-Up">
+          </div>
+          <div class="field">
+            <label>Shortcut</label>
+            <input type="text" id="field-shortcut" placeholder="e.g. followup">
+            <div class="hint">Type <span id="trigger-hint">::</span><span id="shortcut-hint">shortcut</span> anywhere to expand</div>
+          </div>
+          <div class="field">
+            <label>Subject <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:10px">optional</span></label>
+            <input type="text" id="field-subject" class="name-input" placeholder="e.g. Following up on our call">
+            <div class="hint">When expanded, subject is copied to clipboard so you can ⌘V it into the email subject field</div>
+          </div>
+          <div class="field">
+            <label>Content</label>
+            <div id="toolbar">
+              <button class="toolbar-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+              <button class="toolbar-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+              <button class="toolbar-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+              <button class="toolbar-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+              <div class="toolbar-sep"></div>
+              <button class="toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list">≡</button>
+              <button class="toolbar-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+              <div class="toolbar-sep"></div>
+              <button class="toolbar-btn link-btn" id="insert-link-btn" title="Insert link">🔗 Link</button>
+              <div class="toolbar-sep"></div>
+              <button class="toolbar-btn link-btn" id="insert-merge-btn" title="Insert merge field">{} Field</button>
+            </div>
+            <div id="editor" contenteditable="true" spellcheck="true"></div>
+            <div class="hint">Use <b>{fieldname}</b> for merge fields that prompt on expansion</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bottom-bar" style="display:none">
+        <div class="meta" id="snippet-meta"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-danger" id="delete-btn">Delete</button>
+          <button class="btn btn-ghost" id="cancel-btn">Cancel</button>
+          <button class="btn btn-primary" id="save-btn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prefs tab -->
+    <div id="view-prefs" style="display:none">
+      <div id="prefs-panel">
+        <h2>Preferences</h2>
+
+        <!-- Trigger prefix -->
+        <div class="pref-row">
+          <div>
+            <div class="pref-label">Trigger prefix</div>
+            <div class="pref-desc">Characters typed before your shortcut</div>
+          </div>
+          <span class="pref-value" id="pref-trigger-display">::</span>
+          <input type="text" id="pref-trigger" class="pref-input" maxlength="5" placeholder="e.g. ::">
+        </div>
+
+        <!-- Keyboard shortcut -->
+        <div class="pref-row">
+          <div>
+            <div class="pref-label">Keyboard shortcut</div>
+            <div class="pref-desc">Open Snippetron from anywhere</div>
+            <div class="hotkey-warning" id="hotkey-warning" style="display:none"></div>
+            <button class="space-key-btn" id="space-key-btn" style="display:none">+ Space</button>
+          </div>
+          <span class="pref-value" id="pref-hotkey-display">⌘⇧Space</span>
+          <input type="text" id="pref-hotkey" class="pref-input hotkey-input" readonly placeholder="Press keys…">
+        </div>
+
+        <div class="import-export-row">
+          <button class="btn btn-ghost" id="export-btn">Export snippets…</button>
+          <button class="btn btn-ghost" id="import-btn">Import snippets…</button>
+        </div>
+      </div>
+
+      <div id="prefs-bottom-bar">
+        <button class="btn btn-ghost" id="prefs-edit-btn">Edit</button>
+        <button class="btn btn-ghost" id="prefs-cancel-btn" style="display:none">Cancel</button>
+        <button class="btn btn-primary" id="prefs-save-btn" style="display:none">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div id="link-dialog-overlay"></div>
+<div id="link-dialog" style="display:none">
+  <label>URL</label>
+  <input type="text" id="link-url-input" placeholder="https://example.com">
+  <div class="dialog-actions">
+    <button class="btn-unlink" id="link-unlink-btn" style="display:none">Remove link</button>
+    <button class="btn btn-ghost" id="link-cancel-btn" style="padding:5px 10px;font-size:12px">Cancel</button>
+    <button class="btn btn-primary" id="link-ok-btn" style="padding:5px 10px;font-size:12px">Apply</button>
+  </div>
+</div>
+
+<div id="merge-dialog">
+  <label>Merge field name</label>
+  <input type="text" id="merge-field-input" placeholder="e.g. name, company">
+  <div class="hint">Expands to a prompt when the snippet is used</div>
+  <div class="dialog-actions">
+    <button class="btn btn-ghost" id="merge-cancel-btn" style="padding:5px 10px;font-size:12px">Cancel</button>
+    <button class="btn btn-primary" id="merge-ok-btn" style="padding:5px 10px;font-size:12px">Insert</button>
+  </div>
+</div>
+
+<script>
+const { ipcRenderer } = require('electron');
+
+let snippets = [];
+let prefs = {};
+let currentId = null;
+let isNew = false;
+let filterText = '';
+let filtered = [];
+let kbIdx = 0;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  snippets = await ipcRenderer.invoke('get-snippets');
+  prefs = await ipcRenderer.invoke('get-prefs');
+  renderList();
+  renderStats();
+  const trigger = prefs.trigger || '::';
+  document.getElementById('pref-trigger-display').textContent = trigger;
+  document.getElementById('trigger-hint').textContent = trigger;
+  document.getElementById('pref-hotkey-display').textContent =
+    acceleratorToSymbols(prefs.hotkey || 'CmdOrCtrl+Shift+Space');
+}
+
+ipcRenderer.on('snippets-updated', (_, updated) => {
+  snippets = updated;
+  renderList();
+  renderStats();
+});
+
+function updateShortcutHint() {
+  const val = document.getElementById('field-shortcut').value.trim() || 'shortcut';
+  document.getElementById('shortcut-hint').textContent = val;
+}
+
+// ── List rendering ────────────────────────────────────────────────────────────
+function renderList() {
+  const list = document.getElementById('snippet-list');
+  const q = filterText.toLowerCase();
+  filtered = snippets.filter(s =>
+    s.name.toLowerCase().includes(q) || s.shortcut.toLowerCase().includes(q)
+  );
+
+  if (filtered.length === 0) kbIdx = -1;
+  else kbIdx = Math.max(0, Math.min(kbIdx, filtered.length - 1));
+
+  list.innerHTML = filtered.length === 0
+    ? `<div style="padding:16px;color:var(--text3);font-size:13px;text-align:center">No snippets found</div>`
+    : filtered.map((s, i) => `
+      <div class="snippet-item${s.id === currentId ? ' active' : ''}${i === kbIdx ? ' kb-selected' : ''}" data-id="${s.id}" data-idx="${i}">
+        <div class="shortcut">${prefs.trigger || '::'}${escHtml(s.shortcut)}</div>
+        <div class="name">${escHtml(s.name)}</div>
+        <div class="use-hint">↵</div>
+      </div>`).join('');
+
+  list.querySelectorAll('.snippet-item').forEach(el => {
+    el.addEventListener('click', () => selectSnippet(el.dataset.id));
+  });
+}
+
+function scrollKbSelected() {
+  const el = document.querySelector('.snippet-item.kb-selected');
+  if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+function quickPaste(s) {
+  if (!s) return;
+  ipcRenderer.invoke('track-usage', s.id);
+  ipcRenderer.invoke('quick-paste', s.html, s.subject || '');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Select/edit snippet ───────────────────────────────────────────────────────
+function selectSnippet(id) {
+  const s = snippets.find(x => x.id === id);
+  if (!s) return;
+  currentId = id;
+  isNew = false;
+  populateForm(s);
+  renderList();
+  // Copy to clipboard and show flash on the list item
+  ipcRenderer.invoke('copy-snippet', s.html);
+  const el = document.querySelector(`.snippet-item[data-id="${id}"]`);
+  if (el) {
+    el.classList.add('copied');
+    setTimeout(() => el.classList.remove('copied'), 1400);
+  }
+}
+
+function populateForm(s) {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('editor-form').style.display = 'block';
+  document.getElementById('bottom-bar').style.display = 'flex';
+  document.getElementById('field-name').value = s.name || '';
+  document.getElementById('field-shortcut').value = s.shortcut || '';
+  document.getElementById('field-subject').value = s.subject || '';
+  document.getElementById('editor').innerHTML = s.html || '';
+  document.getElementById('snippet-meta').textContent =
+    s.createdAt ? `Created ${new Date(s.createdAt).toLocaleDateString()}` : '';
+  updateShortcutHint();
+}
+
+function newSnippet() {
+  isNew = true;
+  currentId = 'new_' + Date.now();
+  const blank = { id: currentId, name: '', shortcut: '', subject: '', html: '', createdAt: new Date().toISOString() };
+  populateForm(blank);
+  renderList();
+  document.getElementById('field-name').focus();
+}
+
+// ── Save / delete ─────────────────────────────────────────────────────────────
+async function saveSnippet() {
+  const name = document.getElementById('field-name').value.trim();
+  const shortcut = document.getElementById('field-shortcut').value.trim().replace(/\s/g, '');
+  const subject = document.getElementById('field-subject').value.trim();
+  const html = document.getElementById('editor').innerHTML;
+
+  if (!name) { toast('Please add a name', 'error'); return; }
+  if (!shortcut) { toast('Please add a shortcut', 'error'); return; }
+
+  // Check duplicate shortcut
+  const dup = snippets.find(s => s.shortcut === shortcut && s.id !== currentId);
+  if (dup) { toast(`"${shortcut}" is already used by "${dup.name}"`, 'error'); return; }
+
+  const snippet = { id: isNew ? Date.now().toString() : currentId, name, shortcut, subject, html, createdAt: isNew ? new Date().toISOString() : undefined };
+  if (!isNew) {
+    const existing = snippets.find(s => s.id === currentId);
+    if (existing) snippet.createdAt = existing.createdAt;
+  }
+
+  await ipcRenderer.invoke('save-snippet', snippet);
+  snippets = await ipcRenderer.invoke('get-snippets');
+  currentId = snippet.id;
+  isNew = false;
+  renderList();
+  toast('Saved!', 'success');
+}
+
+async function deleteSnippet() {
+  if (!currentId || isNew) return;
+  if (!confirm('Delete this snippet?')) return;
+  await ipcRenderer.invoke('delete-snippet', currentId);
+  snippets = await ipcRenderer.invoke('get-snippets');
+  currentId = null;
+  document.getElementById('empty-state').style.display = 'flex';
+  document.getElementById('editor-form').style.display = 'none';
+  document.getElementById('bottom-bar').style.display = 'none';
+  renderList();
+  toast('Deleted');
+}
+
+function cancelEdit() {
+  currentId = null;
+  isNew = false;
+  document.getElementById('empty-state').style.display = 'flex';
+  document.getElementById('editor-form').style.display = 'none';
+  document.getElementById('bottom-bar').style.display = 'none';
+  renderStats();
+  renderList();
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso);
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+function renderStats() {
+  document.getElementById('stat-total').textContent = snippets.length;
+  const totalUses = snippets.reduce((n, s) => n + (s.useCount || 0), 0);
+  document.getElementById('stat-uses').textContent = totalUses;
+
+  const table = document.getElementById('stat-table');
+  if (!snippets.length) {
+    table.innerHTML = '<div class="stat-table-empty">No snippets yet</div>';
+    return;
+  }
+
+  const sorted = [...snippets].sort((a, b) => (b.useCount || 0) - (a.useCount || 0));
+  const trigger = prefs.trigger || '::';
+
+  table.innerHTML =
+    `<div class="stat-table-header">
+       <span style="flex:1">Snippet</span>
+       <span>Uses</span>
+     </div>` +
+    sorted.map(s => {
+      const count = s.useCount || 0;
+      return `<div class="stat-table-row" data-id="${escHtml(s.id)}">
+        <span class="stat-row-name">${escHtml(s.name)}</span>
+        <span class="stat-row-shortcut">${escHtml(trigger + (s.shortcut || ''))}</span>
+        <span class="stat-row-count${count === 0 ? ' zero' : ''}">${count}</span>
+      </div>`;
+    }).join('');
+
+  // Click a stat row to open that snippet
+  table.querySelectorAll('.stat-table-row[data-id]').forEach(row => {
+    row.addEventListener('click', () => selectSnippet(row.dataset.id));
+  });
+}
+
+// ── Toolbar ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
+  btn.addEventListener('mousedown', e => {
+    e.preventDefault();
+    document.execCommand(btn.dataset.cmd, false, null);
+    updateToolbarState();
+  });
+});
+
+let savedRange = null;
+
+function showLinkDialog() {
+  const editor = document.getElementById('editor');
+  // Save selection so we can restore it after the input steals focus
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
+
+  // Check if cursor is inside an existing link
+  const anchor = sel && sel.anchorNode && sel.anchorNode.closest && sel.anchorNode.closest('a')
+    || (sel && sel.anchorNode && sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest('a'));
+  const existingUrl = anchor ? anchor.href : '';
+
+  const input = document.getElementById('link-url-input');
+  input.value = existingUrl || '';
+
+  const unlinkBtn = document.getElementById('link-unlink-btn');
+  unlinkBtn.style.display = existingUrl ? 'inline-block' : 'none';
+
+  // Position dialog near the toolbar
+  const btn = document.getElementById('insert-link-btn');
+  const rect = btn.getBoundingClientRect();
+  const dialog = document.getElementById('link-dialog');
+  dialog.style.display = 'block';
+  dialog.style.top = (rect.bottom + 6) + 'px';
+  dialog.style.left = Math.min(rect.left, window.innerWidth - 316) + 'px';
+
+  document.getElementById('link-dialog-overlay').style.display = 'block';
+  setTimeout(() => input.focus(), 0);
+}
+
+function hideLinkDialog() {
+  document.getElementById('link-dialog').style.display = 'none';
+  document.getElementById('link-dialog-overlay').style.display = 'none';
+}
+
+function applyLink() {
+  const rawUrl = document.getElementById('link-url-input').value.trim();
+  if (!rawUrl) { hideLinkDialog(); return; }
+  const url = rawUrl.startsWith('http') ? rawUrl : 'https://' + rawUrl;
+
+  // Restore selection in editor
+  const editor = document.getElementById('editor');
+  editor.focus();
+  if (savedRange) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  }
+  document.execCommand('createLink', false, url);
+  hideLinkDialog();
+}
+
+document.getElementById('insert-link-btn').addEventListener('mousedown', e => {
+  e.preventDefault();
+  showLinkDialog();
+});
+
+document.getElementById('link-ok-btn').addEventListener('click', applyLink);
+
+document.getElementById('link-url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') applyLink();
+  if (e.key === 'Escape') hideLinkDialog();
+});
+
+document.getElementById('link-cancel-btn').addEventListener('click', hideLinkDialog);
+
+document.getElementById('link-dialog-overlay').addEventListener('click', hideLinkDialog);
+
+document.getElementById('link-unlink-btn').addEventListener('click', () => {
+  const editor = document.getElementById('editor');
+  editor.focus();
+  if (savedRange) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  }
+  // Expand selection to cover the whole link if nothing is selected
+  const sel = window.getSelection();
+  if (sel && sel.isCollapsed && sel.anchorNode) {
+    const anchor = sel.anchorNode.closest
+      ? sel.anchorNode.closest('a')
+      : sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest('a');
+    if (anchor) {
+      const range = document.createRange();
+      range.selectNodeContents(anchor);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+  document.execCommand('unlink', false, null);
+  hideLinkDialog();
+});
+
+// ── Merge field dialog ────────────────────────────────────────────────────────
+let savedMergeRange = null;
+
+function showMergeDialog() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) savedMergeRange = sel.getRangeAt(0).cloneRange();
+
+  const input = document.getElementById('merge-field-input');
+  input.value = '';
+
+  const btn = document.getElementById('insert-merge-btn');
+  const rect = btn.getBoundingClientRect();
+  const dialog = document.getElementById('merge-dialog');
+  dialog.style.display = 'block';
+  dialog.style.top = (rect.bottom + 6) + 'px';
+  dialog.style.left = Math.min(rect.left, window.innerWidth - 296) + 'px';
+
+  document.getElementById('link-dialog-overlay').style.display = 'block';
+  setTimeout(() => input.focus(), 0);
+}
+
+function hideMergeDialog() {
+  document.getElementById('merge-dialog').style.display = 'none';
+  document.getElementById('link-dialog-overlay').style.display = 'none';
+}
+
+function applyMergeField() {
+  const field = document.getElementById('merge-field-input').value.trim();
+  if (!field) { hideMergeDialog(); return; }
+
+  const editor = document.getElementById('editor');
+  editor.focus();
+  if (savedMergeRange) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedMergeRange);
+  }
+  const chip = `<span class="merge-chip" contenteditable="false">{${field}}</span>&nbsp;`;
+  document.execCommand('insertHTML', false, chip);
+  hideMergeDialog();
+}
+
+document.getElementById('insert-merge-btn').addEventListener('mousedown', e => {
+  e.preventDefault();
+  showMergeDialog();
+});
+
+document.getElementById('merge-ok-btn').addEventListener('click', applyMergeField);
+document.getElementById('merge-cancel-btn').addEventListener('click', hideMergeDialog);
+
+document.getElementById('merge-field-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') applyMergeField();
+  if (e.key === 'Escape') hideMergeDialog();
+});
+
+// ── Paste cleanup ─────────────────────────────────────────────────────────────
+document.getElementById('editor').addEventListener('paste', e => {
+  e.preventDefault();
+  const html = e.clipboardData.getData('text/html');
+  if (html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    tmp.querySelectorAll('style, script, meta, link').forEach(el => el.remove());
+    tmp.querySelectorAll('*').forEach(el => {
+      el.removeAttribute('style');
+      el.removeAttribute('class');
+      el.removeAttribute('id');
+      // Keep href on anchors, remove everything else
+      [...el.attributes].forEach(attr => {
+        if (el.tagName === 'A' && attr.name === 'href') return;
+        if (['href','src'].includes(attr.name)) return;
+        el.removeAttribute(attr.name);
+      });
+    });
+    document.execCommand('insertHTML', false, tmp.innerHTML);
+  } else {
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+  }
+});
+
+// ── Toolbar state ─────────────────────────────────────────────────────────────
+document.getElementById('editor').addEventListener('keyup', updateToolbarState);
+document.getElementById('editor').addEventListener('mouseup', updateToolbarState);
+document.addEventListener('selectionchange', () => {
+  if (document.activeElement === document.getElementById('editor')) updateToolbarState();
+});
+
+function updateToolbarState() {
+  ['bold', 'italic', 'underline', 'strikeThrough'].forEach(cmd => {
+    const btn = document.querySelector(`.toolbar-btn[data-cmd="${cmd}"]`);
+    if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
+  });
+  // Highlight link button when cursor is inside a link
+  const sel = window.getSelection();
+  const inLink = sel && sel.anchorNode && !!(
+    (sel.anchorNode.closest && sel.anchorNode.closest('a')) ||
+    (sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest('a'))
+  );
+  document.getElementById('insert-link-btn').classList.toggle('active', !!inLink);
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const v = tab.dataset.tab;
+    document.getElementById('view-snippets').style.display = v === 'snippets' ? 'flex' : 'none';
+    document.getElementById('view-prefs').style.display = v === 'prefs' ? 'flex' : 'none';
+  });
+});
+
+// ── Prefs helpers ─────────────────────────────────────────────────────────────
+const SYMBOL_MAP = {
+  CmdOrCtrl: '⌘', Command: '⌘', Cmd: '⌘',
+  Ctrl: '⌃', Control: '⌃',
+  Alt: '⌥', Option: '⌥',
+  Shift: '⇧',
+  Return: '↩', Enter: '↩',
+  Escape: '⎋', Esc: '⎋',
+  Tab: '⇥',
+  Backspace: '⌫',
+  Delete: '⌦',
+  ArrowUp: '↑', Up: '↑',
+  ArrowDown: '↓', Down: '↓',
+  ArrowLeft: '←', Left: '←',
+  ArrowRight: '→', Right: '→',
+};
+
+function acceleratorToSymbols(acc) {
+  if (!acc) return '';
+  return acc.split('+').map(p => SYMBOL_MAP[p] || p).join('');
+}
+
+function eventToAccelerator(e) {
+  const parts = [];
+  if (e.metaKey || e.ctrlKey) parts.push('CmdOrCtrl');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+
+  // Use e.code (layout-independent) so Cmd+Shift+Space always reads as Space
+  const modifierCodes = new Set([
+    'MetaLeft','MetaRight','ControlLeft','ControlRight',
+    'AltLeft','AltRight','ShiftLeft','ShiftRight','CapsLock',
+  ]);
+  if (!modifierCodes.has(e.code)) {
+    if (e.code === 'Space') parts.push('Space');
+    else if (e.code.startsWith('Key')) parts.push(e.code.slice(3));       // KeyA → A
+    else if (e.code.startsWith('Digit')) parts.push(e.code.slice(5));     // Digit1 → 1
+    else if (/^F\d+$/.test(e.code)) parts.push(e.code);                  // F1–F24
+    else if (e.code === 'Enter' || e.code === 'NumpadEnter') parts.push('Return');
+    else if (e.code === 'Escape') parts.push('Escape');
+    else if (e.code === 'Tab') parts.push('Tab');
+    else if (e.code === 'Backspace') parts.push('Backspace');
+    else if (e.code === 'Delete') parts.push('Delete');
+    else if (e.code === 'ArrowUp') parts.push('Up');
+    else if (e.code === 'ArrowDown') parts.push('Down');
+    else if (e.code === 'ArrowLeft') parts.push('Left');
+    else if (e.code === 'ArrowRight') parts.push('Right');
+    else if (e.key && e.key.length === 1) parts.push(e.key.toUpperCase());
+  }
+
+  const hasMod = parts.some(p => ['CmdOrCtrl','Alt','Shift'].includes(p));
+  const hasKey = parts.some(p => !['CmdOrCtrl','Alt','Shift'].includes(p));
+  return (hasMod && hasKey) ? parts.join('+') : '';
+}
+
+// ── Prefs edit mode ───────────────────────────────────────────────────────────
+let pendingAccelerator = '';
+let prefsEditing = false;
+
+function setPrefsEditMode(editing) {
+  prefsEditing = editing;
+
+  // Trigger row
+  document.getElementById('pref-trigger-display').style.display = editing ? 'none' : '';
+  const trigInp = document.getElementById('pref-trigger');
+  trigInp.style.display = editing ? 'inline-block' : 'none';
+  if (editing) { trigInp.value = prefs.trigger || '::'; trigInp.focus(); trigInp.select(); }
+
+  // Hotkey row
+  document.getElementById('pref-hotkey-display').style.display = editing ? 'none' : '';
+  const hkInp = document.getElementById('pref-hotkey');
+  hkInp.style.display = editing ? 'inline-block' : 'none';
+  if (editing) {
+    pendingAccelerator = prefs.hotkey || 'CmdOrCtrl+Shift+Space';
+    hkInp.value = acceleratorToSymbols(pendingAccelerator);
+    // Suspend the global shortcut so pressing it goes into the field
+    ipcRenderer.invoke('suspend-hotkey');
+  } else {
+    ipcRenderer.invoke('resume-hotkey');
+  }
+
+  // Bottom bar
+  document.getElementById('prefs-edit-btn').style.display = editing ? 'none' : '';
+  document.getElementById('prefs-cancel-btn').style.display = editing ? '' : 'none';
+  document.getElementById('prefs-save-btn').style.display = editing ? '' : 'none';
+
+  // When exiting, clear per-row highlights (focus/blur handles them during editing)
+  if (!editing) {
+    document.querySelectorAll('#prefs-panel .pref-row').forEach(row => row.classList.remove('editing'));
+    document.getElementById('hotkey-warning').style.display = 'none';
+    document.getElementById('space-key-btn').style.display = 'none';
+    capturedMods = [];
+  }
+}
+
+async function checkHotkeyConflict(acc) {
+  const result = await ipcRenderer.invoke('check-hotkey', acc);
+  const warn = document.getElementById('hotkey-warning');
+  const inp = document.getElementById('pref-hotkey');
+  if (result === 'taken') {
+    warn.textContent = '⚠ Already in use by another app';
+    warn.style.display = '';
+    inp.style.borderColor = '#f4645f';
+  } else if (result === 'invalid') {
+    warn.textContent = '⚠ Invalid shortcut';
+    warn.style.display = '';
+    inp.style.borderColor = '#f4645f';
+  } else {
+    warn.style.display = 'none';
+    inp.style.borderColor = '';
+  }
+}
+
+function captureHotkey(acc) {
+  pendingAccelerator = acc;
+  document.getElementById('pref-hotkey').value = acceleratorToSymbols(acc);
+  document.getElementById('space-key-btn').style.display = 'none';
+  checkHotkeyConflict(acc);
+}
+
+// Module-level: track modifier state from last keydown so Space keyup can use
+// it even if macOS releases the modifier flags before keyup fires.
+let capturedMods = [];
+
+// ── LAYER 1: window-level capture (fires before element handlers, may catch
+//    Space even when macOS intercepts it at the element level)
+window.addEventListener('keydown', e => {
+  if (document.activeElement !== document.getElementById('pref-hotkey')) return;
+  if (e.code !== 'Space') return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (capturedMods.length) captureHotkey([...capturedMods, 'Space'].join('+'));
+}, true);
+
+// ── LAYER 2: element-level keydown
+document.getElementById('pref-hotkey').addEventListener('keydown', e => {
+  e.preventDefault();
+  if (e.key === 'Escape') { setPrefsEditMode(false); return; }
+
+  // Save modifier state FIRST (before any early return) so keyup can use it
+  capturedMods = [];
+  if (e.metaKey || e.ctrlKey) capturedMods.push('CmdOrCtrl');
+  if (e.altKey) capturedMods.push('Alt');
+  if (e.shiftKey) capturedMods.push('Shift');
+
+  if (e.code === 'Space') {
+    // Backup to layer 1; if we're here, layer 1 didn't stop propagation
+    if (capturedMods.length) captureHotkey([...capturedMods, 'Space'].join('+'));
+    return;
+  }
+
+  const acc = eventToAccelerator(e);
+  if (acc) {
+    captureHotkey(acc);
+  } else if (capturedMods.length) {
+    // Show modifier progress (⌘⇧…) and reveal the Space fallback button
+    document.getElementById('pref-hotkey').value =
+      capturedMods.map(p => SYMBOL_MAP[p] || p).join('') + '…';
+    document.getElementById('space-key-btn').style.display = '';
+  }
+});
+
+// ── LAYER 3: keyup fallback — uses capturedMods (not e.metaKey) because by
+//    the time Space keyup fires the user may have already released the modifiers
+document.getElementById('pref-hotkey').addEventListener('keyup', e => {
+  if (e.code !== 'Space') return;
+  e.preventDefault();
+  if (capturedMods.length) captureHotkey([...capturedMods, 'Space'].join('+'));
+});
+
+// ── LAYER 4: manual Space button (bulletproof fallback for system-intercepted combos)
+document.getElementById('space-key-btn').addEventListener('click', () => {
+  if (capturedMods.length) captureHotkey([...capturedMods, 'Space'].join('+'));
+  document.getElementById('pref-hotkey').focus();
+});
+
+document.getElementById('pref-trigger').addEventListener('keydown', e => {
+  if (e.key === 'Escape') setPrefsEditMode(false);
+});
+
+// Highlight only the focused pref row (not all rows at once)
+['pref-trigger', 'pref-hotkey'].forEach(id => {
+  const inp = document.getElementById(id);
+  inp.addEventListener('focus', () => inp.closest('.pref-row').classList.add('editing'));
+  inp.addEventListener('blur',  () => inp.closest('.pref-row').classList.remove('editing'));
+});
+
+document.getElementById('prefs-edit-btn').addEventListener('click', () => setPrefsEditMode(true));
+document.getElementById('prefs-cancel-btn').addEventListener('click', () => setPrefsEditMode(false));
+
+document.getElementById('prefs-save-btn').addEventListener('click', async () => {
+  // Save trigger
+  const trigVal = document.getElementById('pref-trigger').value.trim() || '::';
+  await ipcRenderer.invoke('save-prefs', { trigger: trigVal });
+  prefs.trigger = trigVal;
+  document.getElementById('pref-trigger-display').textContent = trigVal;
+  document.getElementById('trigger-hint').textContent = trigVal;
+  renderList();
+
+  // Save hotkey
+  if (pendingAccelerator && pendingAccelerator !== (prefs.hotkey || 'CmdOrCtrl+Shift+Space')) {
+    const ok = await ipcRenderer.invoke('save-hotkey', pendingAccelerator);
+    if (!ok) {
+      toast('Shortcut already in use by another app — other changes saved', 'error');
+      setPrefsEditMode(false);
+      return;
+    }
+    prefs.hotkey = pendingAccelerator;
+    document.getElementById('pref-hotkey-display').textContent = acceleratorToSymbols(pendingAccelerator);
+  }
+
+  setPrefsEditMode(false);
+  toast('Saved', 'success');
+});
+
+document.getElementById('export-btn').addEventListener('click', () => ipcRenderer.invoke('export-snippets'));
+document.getElementById('import-btn').addEventListener('click', async () => {
+  const count = await ipcRenderer.invoke('import-snippets');
+  if (count === false) toast('Import failed', 'error');
+  else if (count === 0) toast('No new snippets found');
+  else {
+    snippets = await ipcRenderer.invoke('get-snippets');
+    renderList();
+    toast(`Imported ${count} snippet${count !== 1 ? 's' : ''}`, 'success');
+  }
+});
+
+// ── Events ────────────────────────────────────────────────────────────────────
+document.getElementById('new-btn').addEventListener('click', newSnippet);
+document.getElementById('save-btn').addEventListener('click', saveSnippet);
+document.getElementById('delete-btn').addEventListener('click', deleteSnippet);
+document.getElementById('cancel-btn').addEventListener('click', cancelEdit);
+document.getElementById('field-shortcut').addEventListener('input', updateShortcutHint);
+document.getElementById('search-input').addEventListener('input', e => {
+  filterText = e.target.value;
+  kbIdx = 0;
+  renderList();
+});
+
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    kbIdx = Math.min(kbIdx + 1, filtered.length - 1);
+    renderList();
+    scrollKbSelected();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    kbIdx = Math.max(kbIdx - 1, 0);
+    renderList();
+    scrollKbSelected();
+  } else if (e.key === 'Enter') {
+    if (filtered.length > 0 && kbIdx >= 0) quickPaste(filtered[kbIdx]);
+  } else if (e.key === 'Escape') {
+    ipcRenderer.invoke('hide-manager');
+  }
+});
+
+// Focus search + reset when opened via global shortcut
+ipcRenderer.on('focus-search', () => {
+  const snippetsTab = document.querySelector('.tab[data-tab="snippets"]');
+  if (snippetsTab && !snippetsTab.classList.contains('active')) snippetsTab.click();
+  const input = document.getElementById('search-input');
+  input.value = '';
+  filterText = '';
+  kbIdx = 0;
+  renderList();
+  input.focus();
+});
+
+// Cmd+S to save
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); saveSnippet(); }
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show${type ? ' ' + type : ''}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+init();
+</script>
+</body>
+</html>
