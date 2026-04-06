@@ -228,8 +228,15 @@ function startKeyboardHook() {
         return;
       }
 
-      // Space or Enter resets buffer
-      if (e.keycode === 57 || e.keycode === 28) {
+      // Space: check for snippet match first, then reset buffer
+      if (e.keycode === 57) {
+        checkForTrigger(true); // space is the terminator that confirms expansion
+        typedBuffer = '';
+        return;
+      }
+
+      // Enter resets buffer without expanding
+      if (e.keycode === 28) {
         typedBuffer = '';
         return;
       }
@@ -241,8 +248,6 @@ function startKeyboardHook() {
 
       // Keep buffer at 60 chars max
       if (typedBuffer.length > 60) typedBuffer = typedBuffer.slice(-60);
-
-      checkForTrigger();
     });
 
     uIOhook.start();
@@ -267,21 +272,21 @@ function resolveChar(e) {
   return lower;
 }
 
-function checkForTrigger() {
+function checkForTrigger(spaceTerminated = false) {
+  if (!spaceTerminated) return; // expansion only fires when space is typed after shortcut
   const trigger = prefs.trigger || '::';
   const idx = typedBuffer.lastIndexOf(trigger);
   if (idx === -1) return;
 
   const afterTrigger = typedBuffer.slice(idx + trigger.length);
 
-  // Only expand on word characters (no spaces mid-trigger)
   if (!/^\w+$/.test(afterTrigger)) return;
 
   const match = snippets.find(s => s.shortcut.toLowerCase() === afterTrigger.toLowerCase());
   if (!match) return;
 
-  // Delete the typed trigger+shortcut using backspace via AppleScript
-  const charsToDelete = trigger.length + afterTrigger.length;
+  // +1 to also erase the space the user just typed
+  const charsToDelete = trigger.length + afterTrigger.length + 1;
   typedBuffer = '';
 
   const { execSync } = require('child_process');
