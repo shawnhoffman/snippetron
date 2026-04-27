@@ -7,3 +7,5 @@ out/
 # User data lives in ~/.snippetron, not here — but just in case:
 snippets.json
 prefs.json
+# Design source files
+*.pxd
