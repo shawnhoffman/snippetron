@@ -42,6 +42,9 @@
       "src/**/*",
       "assets/**/*",
       "!src/**/*.map"
+    ],
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**"
     ]
   }
 }
