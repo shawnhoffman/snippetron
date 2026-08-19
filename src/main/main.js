@@ -27,9 +27,14 @@ if (!isDev) {
 }
 
 // ─── Data paths ───────────────────────────────────────────────────────────────
-const DATA_DIR = path.join(os.homedir(), '.snippetron');
+// SNIPPETRON_DATA_DIR lets a dev instance run against an isolated copy of the
+// data, so it can't fight the installed app over the same files.
+const DATA_DIR = process.env.SNIPPETRON_DATA_DIR || path.join(os.homedir(), '.snippetron');
 const SNIPPETS_FILE = path.join(DATA_DIR, 'snippets.json');
 const PREFS_FILE = path.join(DATA_DIR, 'prefs.json');
+// Folders live in their own file so snippets.json stays a bare array — an older
+// build of the app can still read it and keep expanding snippets.
+const FOLDERS_FILE = path.join(DATA_DIR, 'folders.json');
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -47,9 +52,31 @@ function saveSnippets(snippets) {
   fs.writeFileSync(SNIPPETS_FILE, JSON.stringify(snippets, null, 2));
 }
 
+function loadFolders() {
+  ensureDataDir();
+  if (!fs.existsSync(FOLDERS_FILE)) return [];
+  try {
+    const data = JSON.parse(fs.readFileSync(FOLDERS_FILE, 'utf8'));
+    const list = Array.isArray(data) ? data : (data.folders || []);
+    return list.map((f, i) => ({
+      id: String(f.id),
+      name: f.name || 'Folder',
+      order: Number.isFinite(f.order) ? f.order : i,
+      collapsed: !!f.collapsed,
+      color: f.color || null,
+      createdAt: f.createdAt || new Date().toISOString(),
+    }));
+  } catch { return []; }
+}
+
+function saveFolders(list) {
+  ensureDataDir();
+  fs.writeFileSync(FOLDERS_FILE, JSON.stringify({ version: 1, folders: list }, null, 2));
+}
+
 function loadPrefs() {
   ensureDataDir();
-  const defaults = { trigger: '::', launchAtLogin: false };
+  const defaults = { trigger: '::', launchAtLogin: false, snippetSort: 'manual', folderSort: 'manual', sidebarWidth: 240 };
   if (!fs.existsSync(PREFS_FILE)) return defaults;
   try { return { ...defaults, ...JSON.parse(fs.readFileSync(PREFS_FILE, 'utf8')) }; }
   catch { return defaults; }
@@ -66,8 +93,96 @@ let managerWindow = null;
 let mergeWindow = null;
 let searchWindow = null;
 let snippets = loadSnippets();
+let folders = loadFolders();
 let prefs = loadPrefs();
 let typedBuffer = '';
+
+// Migrate + reconcile before anything reads the data. Declared above as function
+// declarations, so calling them here is safe.
+migrateSnippetOrdering();
+reconcile();
+
+// ─── Renderer notification ────────────────────────────────────────────────────
+// Every mutation of `snippets` or `folders` goes through here so no window can
+// drift out of sync (previously save-snippet notified only the search window and
+// delete-snippet notified nobody).
+function broadcast() {
+  for (const w of [managerWindow, searchWindow]) {
+    if (w && !w.isDestroyed()) {
+      w.webContents.send('snippets-updated', snippets);
+      w.webContents.send('folders-updated', folders);
+    }
+  }
+}
+
+// Drop keys whose value is undefined so a partial update can't blank a field.
+function stripUndefined(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) if (v !== undefined) out[k] = v;
+  return out;
+}
+
+// ─── Folders: migration, ordering, integrity ──────────────────────────────────
+
+// Backfill folderId + order onto records written before folders existed. Order
+// comes from current array position, so the existing list keeps the exact order
+// the user already sees.
+function migrateSnippetOrdering() {
+  const needs = snippets.some(s => s.order === undefined || s.folderId === undefined);
+  if (!needs) return;
+  const bak = SNIPPETS_FILE + '.bak-preFolders';
+  if (fs.existsSync(SNIPPETS_FILE) && !fs.existsSync(bak)) {
+    try { fs.copyFileSync(SNIPPETS_FILE, bak); } catch {}
+  }
+  snippets = snippets.map((s, i) => ({
+    ...s,
+    folderId: s.folderId === undefined ? null : s.folderId,
+    order: Number.isFinite(s.order) ? s.order : i,
+  }));
+  saveSnippets(snippets);
+}
+
+// Any folderId with no matching folder falls back to Unorganized. Also fills in
+// a missing order, so imported records from another install stay usable.
+function reconcile({ persist = true } = {}) {
+  const known = new Set(folders.map(f => f.id));
+  let changed = false;
+  for (const s of snippets) {
+    if (s.folderId !== null && s.folderId !== undefined && !known.has(s.folderId)) {
+      s.folderId = null;
+      changed = true;
+    }
+    if (s.folderId === undefined) { s.folderId = null; changed = true; }
+    if (!Number.isFinite(s.order)) { s.order = nextOrder(s.folderId); changed = true; }
+  }
+  if (reindexAll()) changed = true;
+  if (changed && persist) { saveSnippets(snippets); saveFolders(folders); }
+  return changed;
+}
+
+function inFolder(folderId) {
+  return snippets.filter(s => (s.folderId ?? null) === (folderId ?? null));
+}
+
+function nextOrder(folderId) {
+  const sibs = inFolder(folderId);
+  return sibs.length ? Math.max(...sibs.map(s => s.order || 0)) + 1 : 0;
+}
+
+// Collapse each container's order values down to a dense 0..n-1 run.
+function reindexAll() {
+  let changed = false;
+  const containers = [null, ...folders.map(f => f.id)];
+  for (const c of containers) {
+    inFolder(c)
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .forEach((s, i) => { if (s.order !== i) { s.order = i; changed = true; } });
+  }
+  folders
+    .sort((a, b) => (a.order || 0) - (b.order || 0))
+    .forEach((f, i) => { if (f.order !== i) { f.order = i; changed = true; } });
+  return changed;
+}
 let uiohook = null;
 
 // ─── Rich text clipboard ──────────────────────────────────────────────────────
@@ -156,7 +271,7 @@ function trackUsage(snippetId) {
   snippets[idx].useCount = (snippets[idx].useCount || 0) + 1;
   snippets[idx].lastUsed = new Date().toISOString();
   saveSnippets(snippets);
-  if (managerWindow) managerWindow.webContents.send('snippets-updated', snippets);
+  broadcast();
 }
 
 function expandSnippet(snippet) {
@@ -217,6 +332,7 @@ const SEMICOLON_CODE = 39; // ; key
 const COLON_SHIFT = true;
 
 function startKeyboardHook() {
+  if (isDev && process.env.SNIPPETRON_NO_HOOK) return; // dev harness: don't fight the installed app
   try {
     const { UiohookKey, uIOhook } = require('uiohook-napi');
     uiohook = uIOhook;
@@ -419,6 +535,7 @@ function createTray() {
 }
 
 function updateTrayMenu() {
+  if (!tray) return; // reachable from the auto-updater before createTray() runs
   const items = [];
 
   if (updateReady) {
@@ -465,15 +582,103 @@ function updateTrayMenu() {
 // ─── IPC handlers ─────────────────────────────────────────────────────────────
 ipcMain.handle('get-snippets', () => snippets);
 ipcMain.handle('get-prefs', () => prefs);
+ipcMain.handle('get-folders', () => folders);
+
+ipcMain.handle('create-folder', (_, name) => {
+  const folder = {
+    id: String(Date.now()),
+    name: (name || 'New folder').trim() || 'New folder',
+    order: folders.length,
+    collapsed: false,
+    color: null,
+    createdAt: new Date().toISOString(),
+  };
+  folders.push(folder);
+  saveFolders(folders);
+  broadcast();
+  return folder;
+});
+
+ipcMain.handle('rename-folder', (_, id, name) => {
+  const f = folders.find(x => x.id === id);
+  if (!f) return false;
+  const clean = (name || '').trim();
+  if (!clean) return false;
+  f.name = clean;
+  saveFolders(folders);
+  broadcast();
+  return true;
+});
+
+// Deleting a folder never deletes snippets — its children move to Unorganized.
+ipcMain.handle('delete-folder', (_, id) => {
+  const f = folders.find(x => x.id === id);
+  if (!f) return false;
+  let n = nextOrder(null);
+  for (const s of inFolder(id)) { s.folderId = null; s.order = n++; }
+  folders = folders.filter(x => x.id !== id);
+  reindexAll();
+  saveSnippets(snippets);
+  saveFolders(folders);
+  broadcast();
+  return true;
+});
+
+// No broadcast: collapse is a per-window view preference, and echoing it back
+// would re-render the list mid-interaction.
+ipcMain.handle('set-folder-collapsed', (_, id, collapsed) => {
+  const f = folders.find(x => x.id === id);
+  if (!f) return false;
+  f.collapsed = !!collapsed;
+  saveFolders(folders);
+  return true;
+});
+
+ipcMain.handle('set-folder-color', (_, id, color) => {
+  const f = folders.find(x => x.id === id);
+  if (!f) return false;
+  f.color = color || null;
+  saveFolders(folders);
+  broadcast();
+  return true;
+});
+
+// One coarse write for any rearrangement. The renderer sends its whole computed
+// layout as {id, folderId, order} tuples — never full snippet bodies, so a
+// concurrent trackUsage write can't be clobbered. Unknown ids are ignored, which
+// makes it idempotent and safe to replay.
+ipcMain.handle('apply-layout', (_, layout = {}) => {
+  const known = new Set(folders.map(f => f.id));
+
+  for (const { id, order } of layout.folders || []) {
+    const f = folders.find(x => x.id === id);
+    if (f && Number.isFinite(order)) f.order = order;
+  }
+
+  const byId = new Map(snippets.map(s => [s.id, s]));
+  for (const { id, folderId, order } of layout.snippets || []) {
+    const s = byId.get(id);
+    if (!s) continue;
+    if (folderId === null || known.has(folderId)) s.folderId = folderId ?? null;
+    if (Number.isFinite(order)) s.order = order;
+  }
+
+  reindexAll();
+  saveSnippets(snippets);
+  saveFolders(folders);
+  broadcast();
+  return true;
+});
 
 ipcMain.handle('save-snippet', (_, snippet) => {
   const idx = snippets.findIndex(s => s.id === snippet.id);
-  if (idx >= 0) snippets[idx] = snippet;
-  else snippets.push(snippet);
+  // Merge, never replace — the editor sends only the fields it owns, so a full
+  // replace silently wiped useCount and lastUsed on every edit.
+  if (idx >= 0) snippets[idx] = { ...snippets[idx], ...stripUndefined(snippet) };
+  else snippets.push({ folderId: null, ...stripUndefined(snippet), order: nextOrder(snippet.folderId ?? null) });
   saveSnippets(snippets);
   updateTrayMenu();
-  // Notify search window if open
-  if (searchWindow) searchWindow.webContents.send('snippets-updated', snippets);
+  broadcast();
   return true;
 });
 
@@ -481,6 +686,7 @@ ipcMain.handle('delete-snippet', (_, id) => {
   snippets = snippets.filter(s => s.id !== id);
   saveSnippets(snippets);
   updateTrayMenu();
+  broadcast();
   return true;
 });
 
@@ -583,7 +789,9 @@ ipcMain.handle('export-snippets', async () => {
     defaultPath: 'snippets.json',
     filters: [{ name: 'JSON', extensions: ['json'] }],
   });
-  if (filePath) fs.writeFileSync(filePath, JSON.stringify(snippets, null, 2));
+  // Bundle shape, so a round-trip keeps the folder structure. The importer above
+  // still reads a bare array, which is what every earlier export produced.
+  if (filePath) fs.writeFileSync(filePath, JSON.stringify({ version: 1, snippets, folders }, null, 2));
   return true;
 });
 
@@ -595,17 +803,45 @@ ipcMain.handle('import-snippets', async () => {
   if (!filePaths.length) return false;
   try {
     const imported = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
-    if (Array.isArray(imported)) {
-      // Merge — skip duplicates by id
-      const existingIds = new Set(snippets.map(s => s.id));
-      const newOnes = imported.filter(s => !existingIds.has(s.id));
-      snippets = [...snippets, ...newOnes];
-      saveSnippets(snippets);
-      updateTrayMenu();
-      return newOnes.length;
+    // Accepts both shapes: a bare array (every export before folders existed)
+    // and a {snippets, folders} bundle.
+    const incomingSnippets = Array.isArray(imported) ? imported : imported.snippets;
+    const incomingFolders = Array.isArray(imported) ? [] : (imported.folders || []);
+    if (!Array.isArray(incomingSnippets)) return false;
+
+    // Bring folders over first, so imported folderIds still resolve. A folder
+    // whose id is taken is matched by name instead of duplicated.
+    const folderIdMap = new Map();
+    for (const f of incomingFolders) {
+      const sameId = folders.find(x => x.id === String(f.id));
+      const sameName = folders.find(x => x.name === f.name);
+      if (sameId) { folderIdMap.set(String(f.id), sameId.id); continue; }
+      if (sameName) { folderIdMap.set(String(f.id), sameName.id); continue; }
+      const created = {
+        id: String(f.id),
+        name: f.name || 'Folder',
+        order: folders.length,
+        collapsed: !!f.collapsed,
+        color: f.color || null,
+        createdAt: f.createdAt || new Date().toISOString(),
+      };
+      folders.push(created);
+      folderIdMap.set(String(f.id), created.id);
     }
+
+    const existingIds = new Set(snippets.map(s => s.id));
+    const newOnes = incomingSnippets
+      .filter(s => !existingIds.has(s.id))
+      .map(s => ({ ...s, folderId: folderIdMap.get(String(s.folderId)) ?? (s.folderId ?? null) }));
+
+    snippets = [...snippets, ...newOnes];
+    reconcile({ persist: false });
+    saveSnippets(snippets);
+    saveFolders(folders);
+    updateTrayMenu();
+    broadcast();
+    return newOnes.length;
   } catch { return false; }
-  return false;
 });
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
@@ -618,9 +854,16 @@ app.whenReady().then(() => {
   // Global shortcut — open manager and jump to search
   globalShortcut.register(prefs.hotkey || 'CmdOrCtrl+Shift+Space', () => createManagerWindow(true));
 
-  // Open manager on first launch if no snippets
-  if (snippets.length === 0) {
+  // Open manager on first launch if no snippets — and always in dev, so the
+  // window is reachable without clicking the tray icon.
+  if (snippets.length === 0 || isDev) {
     setTimeout(createManagerWindow, 500);
+  }
+
+  if (isDev) {
+    try {
+      require('../../dev/harness').install({ app, getWindow: () => managerWindow });
+    } catch (e) { console.error('[harness] failed to load:', e && e.stack || e); }
   }
 });
 
@@ -630,7 +873,11 @@ app.on('window-all-closed', (e) => {
 });
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
+  // Guard: quitting before whenReady (a crash or an early kill) makes
+  // globalShortcut throw, which surfaces as an ugly uncaught-exception dialog.
+  if (app.isReady()) {
+    try { globalShortcut.unregisterAll(); } catch {}
+  }
   if (uiohook) {
     try { uiohook.stop(); } catch {}
   }

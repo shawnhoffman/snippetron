@@ -21,7 +21,15 @@
     --danger: #f87171;
     --success: #4ade80;
     --radius: 10px;
+    /* Folder rows sit one step lighter than a selected snippet row. */
+    --surface3: #32323f;
+    --surface3-hover: #3a3a49;
+    /* Hairline between adjacent snippet rows. */
+    --hairline: rgba(255,255,255,0.045);
+    --indent: 14px;
   }
+  /* search.html and merge.html carry their own copies of the block above; they
+     render no folders, so the tokens below deliberately live here only. */
 
   body {
     font-family: 'DM Sans', sans-serif;
@@ -41,6 +49,7 @@
 
   /* ── Sidebar ── */
   #sidebar {
+    position: relative;
     width: 240px;
     min-width: 240px;
     border-right: 1px solid var(--border);
@@ -155,8 +164,229 @@
   .snippet-item:hover .use-hint,
   .snippet-item.kb-selected .use-hint { opacity: 1; }
 
+  /* ── Folders ── */
+  #snippet-list { position: relative; }   /* anchors #drop-line */
+
+  .list-empty {
+    padding: 16px;
+    color: var(--text3);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .folder-row {
+    background: var(--surface3);
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 7px 8px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .folder-row:hover { background: var(--surface3-hover); }
+
+  .folder-row .chevron {
+    flex-shrink: 0;
+    display: flex;
+    color: var(--text2);
+    transition: transform 0.12s ease;
+  }
+
+  .folder-row.open .chevron { transform: rotate(90deg); }
+
+  .folder-row .folder-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-row .folder-edit {
+    display: flex;
+    color: var(--text2);
+    opacity: 0;
+    transition: opacity 0.1s, color 0.1s;
+  }
+
+  .folder-row:hover .folder-edit { opacity: 1; }
+  .folder-row .folder-edit:hover { color: var(--text); }
+
+  .folder-row .count {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    flex-shrink: 0;
+  }
+
+  /* The indent plus the rule is the membership cue. */
+  .folder-children {
+    margin-left: var(--indent);
+    border-left: 1px solid var(--hairline);
+    padding-left: 2px;
+    margin-bottom: 4px;
+  }
+
+  .folder-children[hidden] { display: none; }
+
+  .folder-empty {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--text3);
+    padding: 6px 10px;
+  }
+
+  .section-row {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    padding: 12px 8px 4px;
+  }
+
+  /* Hairline separator. Not border-top: .snippet-item's transparent border is
+     what .active colours, and a top border visibly breaks that ring. */
+  .snippet-item + .snippet-item { box-shadow: inset 0 1px 0 var(--hairline); }
+  .snippet-item:hover, .snippet-item.active, .snippet-item.kb-selected { box-shadow: none; }
+
+  .folder-name-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 2px 5px;
+    outline: none;
+    user-select: text;   /* body sets user-select: none */
+  }
+
+  /* ── List toolbar ── */
+  #list-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .tool-btn {
+    background: none;
+    border: none;
+    color: var(--text2);
+    padding: 4px 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .tool-btn:hover { background: var(--surface2); color: var(--text); }
+  .tool-btn.on { background: rgba(124,106,247,0.15); color: var(--accent2); }
+
+  #sort-label {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.02em;
+  }
+
+  .list-popup {
+    position: absolute;
+    top: 30px;
+    left: 6px;
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 5px;
+    min-width: 178px;
+    z-index: 20;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  .list-popup[hidden] { display: none; }
+
+  .popup-group {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text3);
+    padding: 5px 7px 2px;
+  }
+
+  .popup-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text);
+    padding: 5px 7px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .popup-item:hover { background: var(--surface3); }
+  .popup-item.danger { color: var(--danger); }
+  .popup-item.danger:hover { background: rgba(248,113,113,0.12); }
+
+  .popup-check {
+    width: 11px;
+    display: flex;
+    flex-shrink: 0;
+    color: var(--accent2);
+  }
+
+  .popup-sep {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 2px;
+  }
+
+  /* ── Drag and drop ── */
+  .drag-source { opacity: 0.35; }
+
+  .folder-row.drop-into {
+    background: rgba(124,106,247,0.18);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .folder-empty.drop-into,
+  .section-row.drop-into {
+    background: rgba(124,106,247,0.14);
+    border-radius: 6px;
+  }
+
+  #drop-line {
+    position: absolute;
+    height: 2px;
+    right: 6px;
+    background: var(--accent2);
+    border-radius: 2px;
+    pointer-events: none;
+    display: none;
+    z-index: 5;
+  }
+
+  #drop-tail { height: 18px; }
+
   #search-hint {
     font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--text3);
     padding: 4px 4px 0;
     font-family: 'DM Mono', monospace;
@@ -178,6 +408,43 @@
   }
 
   #new-btn:hover { opacity: 0.85; }
+
+  .folder-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    width: 100%;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .folder-select:focus { border-color: var(--accent); }
+
+  #sidebar-resize {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    width: 5px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 30;
+  }
+
+  #sidebar-resize:hover { background: rgba(124,106,247,0.35); }
+  body.resizing { cursor: col-resize; }
+  body.resizing * { cursor: col-resize !important; }
+
+  .swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    display: inline-block;
+  }
 
   /* ── Main content ── */
   #main {
@@ -234,11 +501,17 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    /* flex-start, not center: a centered flex column clips its own overflow at
+       the top, which is what made the tail of the stats table unreachable. */
+    justify-content: flex-start;
     gap: 24px;
     color: var(--text3);
-    padding: 32px;
+    padding: 40px 32px 32px;
+    overflow-y: auto;
   }
+
+  #empty-state::-webkit-scrollbar { width: 4px; }
+  #empty-state::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
   #empty-state .icon { font-size: 32px; opacity: 0.3; }
   #empty-state > p { font-size: 13px; }
@@ -294,6 +567,7 @@
   .stat-table-header {
     display: flex;
     align-items: center;
+    gap: 8px;
     padding: 7px 12px;
     font-size: 10px;
     font-weight: 600;
@@ -342,6 +616,27 @@
   }
 
   .stat-row-count.zero { color: var(--text3); }
+
+  .stat-row-when {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text3);
+    flex-shrink: 0;
+    min-width: 52px;
+    text-align: right;
+  }
+
+  .stat-table-more {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text2);
+    text-align: center;
+    cursor: pointer;
+    border-top: 1px solid var(--border);
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .stat-table-more:hover { background: rgba(255,255,255,0.03); color: var(--text); }
 
   .stat-table-empty {
     padding: 16px 12px;
@@ -757,10 +1052,24 @@
     <div id="titlebar"><h1>Snippetron</h1></div>
     <div id="search-box">
       <input id="search-input" type="text" placeholder="Search snippets…">
-      <div id="search-hint">↵ use &nbsp;·&nbsp; click to edit</div>
+      <div id="search-hint">↵ use &nbsp;·&nbsp; drag to organize</div>
     </div>
-    <div id="snippet-list"></div>
+    <div id="list-toolbar">
+      <button class="tool-btn" id="new-folder-btn" title="New folder (⌘⇧N)" aria-label="New folder">
+        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M1.5 3.5 A1 1 0 0 1 2.5 2.5 H5.2 L6.4 4 H11.5 A1 1 0 0 1 12.5 5 V10.5 A1 1 0 0 1 11.5 11.5 H2.5 A1 1 0 0 1 1.5 10.5 Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M7 6.6 V9.4 M5.6 8 H8.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="tool-btn" id="expand-all-btn" title="Expand all" aria-label="Expand or collapse all folders">
+        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M3.5 5 L7 8.2 L10.5 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 8.6 L7 11.8 L10.5 8.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg>
+      </button>
+      <button class="tool-btn" id="sort-btn" title="Sort" aria-label="Sort options">
+        <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><path d="M4 2.5 V11.5 M4 2.5 L2 4.8 M4 2.5 L6 4.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11.5 V2.5 M10 11.5 L8 9.2 M10 11.5 L12 9.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span id="sort-label">manual</span>
+      <div id="sort-popup" class="list-popup" hidden></div>
+    </div>
+    <div id="snippet-list"><div id="drop-line"></div></div>
     <button id="new-btn">+ New Snippet</button>
+    <div id="sidebar-resize" title="Drag to resize"></div>
   </div>
 
   <!-- Main -->
@@ -805,6 +1114,10 @@
             <label>Shortcut</label>
             <input type="text" id="field-shortcut" placeholder="e.g. followup">
             <div class="hint">Type <span id="trigger-hint">::</span><span id="shortcut-hint">shortcut</span> anywhere to expand</div>
+          </div>
+          <div class="field">
+            <label>Folder</label>
+            <select id="field-folder" class="folder-select"></select>
           </div>
           <div class="field">
             <label>Subject <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:10px">optional</span></label>
@@ -914,16 +1227,28 @@ let snippets = [];
 let prefs = {};
 let currentId = null;
 let isNew = false;
+let folders = [];
 let filterText = '';
-let filtered = [];
+let filtered = [];   // visible snippet rows, in visual order — drives keyboard nav
+let rows = [];       // the row model paint() renders
 let kbIdx = 0;
+// A trackUsage broadcast can land mid-drag; re-rendering then would yank the
+// drag source out of the DOM. Defer instead and flush on dragend.
+let dragState = { active: false };
+let newFolderId = null;        // folder a brand-new snippet should be saved into
+let currentIdBeforeNew = null; // selection at the moment "+ New Snippet" was hit
+let renderPending = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   snippets = await ipcRenderer.invoke('get-snippets');
+  folders = await ipcRenderer.invoke('get-folders');
   prefs = await ipcRenderer.invoke('get-prefs');
   renderList();
   renderStats();
+  updateSortUi();
+  updateExpandAllUi();
+  applySidebarWidth();
   const trigger = prefs.trigger || '::';
   document.getElementById('pref-trigger-display').textContent = trigger;
   document.getElementById('trigger-hint').textContent = trigger;
@@ -935,7 +1260,23 @@ ipcRenderer.on('snippets-updated', (_, updated) => {
   snippets = updated;
   renderList();
   renderStats();
+  refreshEditorFolder();
 });
+
+ipcRenderer.on('folders-updated', (_, updated) => {
+  folders = updated;
+  renderList();
+  refreshEditorFolder();
+});
+
+// A snippet can be moved from the list while its editor is open — keep the
+// picker showing where the record actually lives.
+function refreshEditorFolder() {
+  if (isNew || !currentId) return;
+  if (document.getElementById('editor-form').style.display === 'none') return;
+  const s = snippets.find(x => x.id === currentId);
+  if (s) renderFolderPicker(s.folderId ?? null);
+}
 
 function updateShortcutHint() {
   const val = document.getElementById('field-shortcut').value.trim() || 'shortcut';
@@ -943,33 +1284,171 @@ function updateShortcutHint() {
 }
 
 // ── List rendering ────────────────────────────────────────────────────────────
+// The sidebar is a flat list of rows built from folders + snippets. Collapsed
+// children are rendered but hidden, so expand/collapse and search-reveal are
+// class toggles rather than re-renders — which is what lets a drag survive.
+
+const UNSORTED = 'manual';
+
+function byName(a, b) { return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }); }
+function byCreated(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); }
+function byOrder(a, b) { return (a.order || 0) - (b.order || 0); }
+
+function sortSnippets(list) {
+  const mode = prefs.snippetSort || UNSORTED;
+  const out = [...list];
+  if (mode === 'name') return out.sort(byName);
+  if (mode === 'created') return out.sort(byCreated);
+  if (mode === 'uses') return out.sort((a, b) => (b.useCount || 0) - (a.useCount || 0) || byName(a, b));
+  return out.sort(byOrder);
+}
+
+function folderUses(f) {
+  return childrenOf(f.id).reduce((n, s) => n + (s.useCount || 0), 0);
+}
+
+function sortFolders(list) {
+  const mode = prefs.folderSort || UNSORTED;
+  const out = [...list];
+  if (mode === 'name') return out.sort(byName);
+  if (mode === 'created') return out.sort(byCreated);
+  if (mode === 'count') return out.sort((a, b) => childrenOf(b.id).length - childrenOf(a.id).length || byName(a, b));
+  if (mode === 'uses') return out.sort((a, b) => folderUses(b) - folderUses(a) || byName(a, b));
+  return out.sort(byOrder);
+}
+
+function childrenOf(folderId) {
+  return snippets.filter(s => (s.folderId ?? null) === (folderId ?? null));
+}
+
+function isCollapsed(f) {
+  return tempExpanded.has(f.id) ? false : !!f.collapsed;
+}
+
+// Folders auto-expanded by hovering during a drag; reverted on dragend.
+const tempExpanded = new Set();
+
+// Manual rearranging only makes sense against the stored order in an unfiltered
+// view — under a filter or an alternate sort, "drop here" has no stable meaning.
+function canRearrange() {
+  return !filterText && (prefs.snippetSort || UNSORTED) === UNSORTED
+                     && (prefs.folderSort || UNSORTED) === UNSORTED;
+}
+
+function buildRows() {
+  const q = filterText.trim().toLowerCase();
+  const hit = s => !q || (s.name || '').toLowerCase().includes(q)
+                      || (s.shortcut || '').toLowerCase().includes(q);
+  const out = [];
+
+  for (const f of sortFolders(folders)) {
+    const kids = sortSnippets(childrenOf(f.id));
+    // Matching the folder name reveals everything inside it.
+    const nameHit = q && (f.name || '').toLowerCase().includes(q);
+    const shown = q ? (nameHit ? kids : kids.filter(hit)) : kids;
+    // A folder with nothing to show is omitted during search, so results read
+    // like the flat list they replaced rather than a column of empty headers.
+    if (q && shown.length === 0) continue;
+
+    const open = q ? true : !isCollapsed(f);
+    out.push({ kind: 'folder', id: f.id, folder: f, open, total: kids.length, shown: shown.length, searching: !!q });
+    if (shown.length === 0) {
+      out.push({ kind: 'empty-folder', folderId: f.id, visible: open });
+    } else {
+      for (const s of shown) out.push({ kind: 'snippet', id: s.id, snippet: s, folderId: f.id, visible: open, depth: 1 });
+    }
+  }
+
+  const loose = q ? sortSnippets(childrenOf(null)).filter(hit) : sortSnippets(childrenOf(null));
+  // With no folders at all the sidebar is just the flat list it has always been —
+  // no point labelling the only section.
+  if (loose.length && folders.length) out.push({ kind: 'section', label: 'Unorganized' });
+  for (const s of loose) out.push({ kind: 'snippet', id: s.id, snippet: s, folderId: null, visible: true, depth: 0 });
+
+  return out;
+}
+
 function renderList() {
-  const list = document.getElementById('snippet-list');
-  const q = filterText.toLowerCase();
-  filtered = snippets.filter(s =>
-    s.name.toLowerCase().includes(q) || s.shortcut.toLowerCase().includes(q)
-  );
+  // A repaint would destroy the drag source, or an in-progress rename input.
+  if (dragState.active || document.querySelector('.folder-name-input')) {
+    renderPending = true;
+    return;
+  }
+
+  rows = buildRows();
+  filtered = rows.filter(r => r.kind === 'snippet' && r.visible).map(r => r.snippet);
 
   if (filtered.length === 0) kbIdx = -1;
   else kbIdx = Math.max(0, Math.min(kbIdx, filtered.length - 1));
 
-  list.innerHTML = filtered.length === 0
-    ? `<div style="padding:16px;color:var(--text3);font-size:13px;text-align:center">No snippets found</div>`
-    : filtered.map((s, i) => `
-      <div class="snippet-item${s.id === currentId ? ' active' : ''}${i === kbIdx ? ' kb-selected' : ''}" data-id="${s.id}" data-idx="${i}">
-        <div class="shortcut">${prefs.trigger || '::'}${escHtml(s.shortcut)}</div>
+  paint();
+}
+
+function paint() {
+  const list = document.getElementById('snippet-list');
+  const trigger = prefs.trigger || '::';
+  const drag = canRearrange();
+  let idx = 0;   // index into `filtered`, so keyboard nav and the DOM agree
+  let html = '';
+  let openKids = false;
+
+  const closeKids = () => { if (openKids) { html += '</div>'; openKids = false; } };
+
+  for (const r of rows) {
+    if (r.kind === 'folder') {
+      closeKids();
+      const f = r.folder;
+      const count = r.searching ? `${r.shown} of ${r.total}` : String(r.total);
+      const tint = f.color ? ` style="box-shadow: inset 3px 0 0 ${escAttr(f.color)}"` : '';
+      html += `<div class="folder-row${r.open ? ' open' : ''}" data-row data-kind="folder" data-id="${escAttr(f.id)}" draggable="${drag}"${tint}>
+        <span class="chevron">${CHEVRON}</span>
+        <span class="folder-name">${escHtml(f.name)}</span>
+        <span class="folder-edit" data-act="rename" title="Rename">${PENCIL}</span>
+        <span class="count">${escHtml(count)}</span>
+      </div>`;
+      html += `<div class="folder-children" data-kids="${escAttr(f.id)}"${r.open ? '' : ' hidden'}>`;
+      openKids = true;
+    } else if (r.kind === 'empty-folder') {
+      html += `<div class="folder-empty" data-row data-kind="empty-folder" data-folder="${escAttr(r.folderId)}">empty — drop a snippet here</div>`;
+    } else if (r.kind === 'section') {
+      closeKids();
+      html += `<div class="section-row" data-row data-kind="section" data-folder="">${escHtml(r.label)}</div>`;
+    } else {
+      if (r.depth === 0) closeKids();
+      const s = r.snippet;
+      const i = r.visible ? idx++ : -1;
+      html += `<div class="snippet-item${s.id === currentId ? ' active' : ''}${i === kbIdx && i >= 0 ? ' kb-selected' : ''}"
+        data-row data-kind="snippet" data-id="${escAttr(s.id)}" data-idx="${i}" data-folder="${escAttr(r.folderId ?? '')}" draggable="${drag}">
+        <div class="shortcut">${escHtml(trigger + (s.shortcut || ''))}</div>
         <div class="name">${escHtml(s.name)}</div>
         <div class="use-hint">↵</div>
-      </div>`).join('');
+      </div>`;
+    }
+  }
+  closeKids();
 
-  list.querySelectorAll('.snippet-item').forEach(el => {
-    el.addEventListener('click', () => selectSnippet(el.dataset.id));
-  });
+  if (!rows.length) {
+    html = filterText
+      ? `<div class="list-empty">No snippets found</div>`
+      : `<div class="list-empty">No snippets yet</div>`;
+  }
+
+  list.innerHTML = html + `<div id="drop-tail" data-row data-kind="tail" data-folder=""></div>`;
+  list.appendChild(dropLine);
+  updateSearchHint();
+  updateExpandAllUi();
 }
 
 function scrollKbSelected() {
   const el = document.querySelector('.snippet-item.kb-selected');
   if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+const CHEVRON = '<svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true"><path d="M2 1.5 L7 5 L2 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const PENCIL = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M8.2 1.8 L10.2 3.8 L4 10 L2 10 L2 8 Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+
+function escAttr(v) {
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function quickPaste(s) {
@@ -979,7 +1458,7 @@ function quickPaste(s) {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // ── Select/edit snippet ───────────────────────────────────────────────────────
@@ -988,6 +1467,12 @@ function selectSnippet(id) {
   if (!s) return;
   currentId = id;
   isNew = false;
+  // Reached from the stats table too, where the target may sit in a collapsed
+  // folder — open it so the row (and its copied flash) is actually visible.
+  if (s.folderId) {
+    const f = folders.find(x => x.id === s.folderId);
+    if (f && f.collapsed) setFolderCollapsed(f, false);
+  }
   populateForm(s);
   renderList();
   // Copy to clipboard and show flash on the list item
@@ -999,6 +1484,17 @@ function selectSnippet(id) {
   }
 }
 
+let editorFolderId;   // undefined = picker untouched, so leave folderId alone
+
+function renderFolderPicker(selected) {
+  const sel = document.getElementById('field-folder');
+  sel.innerHTML = `<option value="">Unorganized</option>` +
+    sortFolders(folders).map(f =>
+      `<option value="${escAttr(f.id)}">${escHtml(f.name)}</option>`).join('');
+  sel.value = selected ?? '';
+  editorFolderId = selected ?? null;
+}
+
 function populateForm(s) {
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('editor-form').style.display = 'block';
@@ -1007,15 +1503,23 @@ function populateForm(s) {
   document.getElementById('field-shortcut').value = s.shortcut || '';
   document.getElementById('field-subject').value = s.subject || '';
   document.getElementById('editor').innerHTML = s.html || '';
+  renderFolderPicker(s.folderId ?? null);
   document.getElementById('snippet-meta').textContent =
     s.createdAt ? `Created ${new Date(s.createdAt).toLocaleDateString()}` : '';
   updateShortcutHint();
 }
 
-function newSnippet() {
+function newSnippet(folderId) {
+  currentIdBeforeNew = isNew ? null : currentId;
   isNew = true;
   currentId = 'new_' + Date.now();
-  const blank = { id: currentId, name: '', shortcut: '', subject: '', html: '', createdAt: new Date().toISOString() };
+  // Inherit a folder so "new snippet in this folder" works without a drag: an
+  // explicit folder wins, else the folder of whatever is currently selected.
+  const inherited = folderId !== undefined
+    ? folderId
+    : (snippets.find(x => x.id === currentIdBeforeNew) || {}).folderId ?? null;
+  const blank = { id: currentId, name: '', shortcut: '', subject: '', html: '', folderId: inherited, createdAt: new Date().toISOString() };
+  newFolderId = inherited;
   populateForm(blank);
   renderList();
   document.getElementById('field-name').focus();
@@ -1036,6 +1540,8 @@ async function saveSnippet() {
   if (dup) { toast(`"${shortcut}" is already used by "${dup.name}"`, 'error'); return; }
 
   const snippet = { id: isNew ? Date.now().toString() : currentId, name, shortcut, subject, html, createdAt: isNew ? new Date().toISOString() : undefined };
+  if (isNew) snippet.folderId = newFolderId ?? null;
+  else if (editorFolderId !== undefined) snippet.folderId = editorFolderId;
   if (!isNew) {
     const existing = snippets.find(s => s.id === currentId);
     if (existing) snippet.createdAt = existing.createdAt;
@@ -1045,6 +1551,7 @@ async function saveSnippet() {
   snippets = await ipcRenderer.invoke('get-snippets');
   currentId = snippet.id;
   isNew = false;
+  newFolderId = null;
   renderList();
   toast('Saved!', 'success');
 }
@@ -1073,6 +1580,9 @@ function cancelEdit() {
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
+const STATS_COLLAPSED_ROWS = 8;
+let statsExpanded = false;
+
 function timeAgo(iso) {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso);
@@ -1095,24 +1605,39 @@ function renderStats() {
 
   const sorted = [...snippets].sort((a, b) => (b.useCount || 0) - (a.useCount || 0));
   const trigger = prefs.trigger || '::';
+  const shown = statsExpanded ? sorted : sorted.slice(0, STATS_COLLAPSED_ROWS);
+  const hidden = sorted.length - shown.length;
 
   table.innerHTML =
     `<div class="stat-table-header">
        <span style="flex:1">Snippet</span>
-       <span>Uses</span>
+       <span style="min-width:52px;text-align:right">Last used</span>
+       <span style="min-width:32px;text-align:right">Uses</span>
      </div>` +
-    sorted.map(s => {
+    shown.map(s => {
       const count = s.useCount || 0;
       return `<div class="stat-table-row" data-id="${escHtml(s.id)}">
         <span class="stat-row-name">${escHtml(s.name)}</span>
         <span class="stat-row-shortcut">${escHtml(trigger + (s.shortcut || ''))}</span>
+        <span class="stat-row-when">${escHtml(timeAgo(s.lastUsed))}</span>
         <span class="stat-row-count${count === 0 ? ' zero' : ''}">${count}</span>
       </div>`;
-    }).join('');
+    }).join('') +
+    (hidden > 0
+      ? `<div class="stat-table-more" data-toggle="more">Show all ${sorted.length}</div>`
+      : statsExpanded && sorted.length > STATS_COLLAPSED_ROWS
+        ? `<div class="stat-table-more" data-toggle="less">Show less</div>`
+        : '');
 
   // Click a stat row to open that snippet
   table.querySelectorAll('.stat-table-row[data-id]').forEach(row => {
     row.addEventListener('click', () => selectSnippet(row.dataset.id));
+  });
+
+  const more = table.querySelector('.stat-table-more');
+  if (more) more.addEventListener('click', () => {
+    statsExpanded = more.dataset.toggle === 'more';
+    renderStats();
   });
 }
 
@@ -1559,12 +2084,610 @@ document.getElementById('import-btn').addEventListener('click', async () => {
   }
 });
 
+// ── Folder actions ────────────────────────────────────────────────────────────
+async function setFolderCollapsed(f, collapsed) {
+  f.collapsed = collapsed;
+  tempExpanded.delete(f.id);
+  renderList();
+  await ipcRenderer.invoke('set-folder-collapsed', f.id, collapsed);
+}
+
+function toggleFolder(id) {
+  const f = folders.find(x => x.id === id);
+  if (!f) return;
+  setFolderCollapsed(f, !isCollapsed(f));
+}
+
+async function newFolder() {
+  const f = await ipcRenderer.invoke('create-folder', 'New folder');
+  folders = await ipcRenderer.invoke('get-folders');
+  renderList();
+  beginRename(f.id);   // land straight in the rename input
+}
+
+async function removeFolder(id) {
+  const f = folders.find(x => x.id === id);
+  if (!f) return;
+  const n = childrenOf(id).length;
+  const msg = n
+    ? `Delete folder "${f.name}"? Its ${n} snippet${n !== 1 ? 's' : ''} move to Unorganized.`
+    : `Delete folder "${f.name}"?`;
+  if (!confirm(msg)) return;
+  await ipcRenderer.invoke('delete-folder', id);
+  folders = await ipcRenderer.invoke('get-folders');
+  snippets = await ipcRenderer.invoke('get-snippets');
+  renderList();
+  toast('Folder deleted');
+}
+
+// Inline rename: swap the name span for an input in place, so the row doesn't move.
+function beginRename(id) {
+  const row = document.querySelector(`.folder-row[data-id="${CSS.escape(id)}"]`);
+  const f = folders.find(x => x.id === id);
+  if (!row || !f) return;
+  const nameEl = row.querySelector('.folder-name');
+  if (!nameEl || row.querySelector('.folder-name-input')) return;
+
+  const input = document.createElement('input');
+  input.className = 'folder-name-input';
+  input.value = f.name;
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    const next = input.value.trim();
+    // Drop the input first, so the repaint below isn't deferred by its presence.
+    input.remove();
+    renderPending = false;
+    if (commit && next && next !== f.name) {
+      await ipcRenderer.invoke('rename-folder', f.id, next);
+      folders = await ipcRenderer.invoke('get-folders');
+    }
+    renderList();
+  };
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+  // Clicks inside the input must not reach the row's expand/collapse handler.
+  input.addEventListener('click', e => e.stopPropagation());
+  input.addEventListener('dblclick', e => e.stopPropagation());
+  input.addEventListener('mousedown', e => e.stopPropagation());
+}
+
+function expandAll(open) {
+  tempExpanded.clear();
+  for (const f of folders) {
+    f.collapsed = !open;
+    ipcRenderer.invoke('set-folder-collapsed', f.id, !open);
+  }
+  renderList();
+}
+
+function allExpanded() {
+  return folders.length > 0 && folders.every(f => !isCollapsed(f));
+}
+
+function updateSearchHint() {
+  const el = document.getElementById('search-hint');
+  if (!el) return;
+  if (filterText) el.textContent = '↵ use  ·  clear to rearrange';
+  else if ((prefs.snippetSort || UNSORTED) !== UNSORTED || (prefs.folderSort || UNSORTED) !== UNSORTED)
+    el.textContent = '↵ use  ·  manual to rearrange';
+  else el.textContent = '↵ use  ·  drag to organize';
+}
+
+// ── List interaction (delegated) ──────────────────────────────────────────────
+// One set of listeners bound once. The list is re-rendered wholesale, so
+// per-row listeners would be rebound constantly and would fight drag events.
+const listEl = document.getElementById('snippet-list');
+
+listEl.addEventListener('click', e => {
+  const row = e.target.closest('[data-row]');
+  if (!row) return;
+  if (row.dataset.kind === 'snippet') { selectSnippet(row.dataset.id); return; }
+  if (row.dataset.kind === 'folder') {
+    if (e.target.closest('[data-act="rename"]')) { beginRename(row.dataset.id); return; }
+    toggleFolder(row.dataset.id);
+  }
+});
+
+listEl.addEventListener('dblclick', e => {
+  const row = e.target.closest('.folder-row');
+  if (!row) return;
+  // Double-click renames; the single click already toggled, so put it back.
+  toggleFolder(row.dataset.id);
+  beginRename(row.dataset.id);
+});
+
+// ── Drag and drop ─────────────────────────────────────────────────────────────
+// Native HTML5 DnD. A drop resolves to one of three intents:
+//   {type:'into',       folderId}         snippet appended to a folder
+//   {type:'snippet-at', container, index} snippet inserted at a slot
+//   {type:'folder-at',  index}            folder moved to a slot
+const dropLine = document.getElementById('drop-line');
+let dropTarget = null;
+let expandTimer = null;
+let expandTimerFor = null;
+
+function containerOf(el) {
+  const v = el.dataset.folder;
+  return v ? v : null;
+}
+
+// Sibling ids straight from the data. Used whenever a whole container has to be
+// renumbered — the DOM can't be trusted for that, because a collapsed folder's
+// children are present but hidden and would be silently dropped.
+function modelSnippetIds(container) {
+  return sortSnippets(childrenOf(container)).map(s => s.id);
+}
+
+// DOM order is only for reading the *position* the pointer is over: a folder
+// auto-expanded mid-drag is unhidden directly, without a re-render.
+function domSnippetIds(container) {
+  return [...listEl.querySelectorAll('.snippet-item')]
+    .filter(el => containerOf(el) === container && !el.closest('[hidden]'))
+    .map(el => el.dataset.id);
+}
+
+function domFolderIds() {
+  return [...listEl.querySelectorAll('.folder-row')].map(el => el.dataset.id);
+}
+
+function clearDropVisuals() {
+  listEl.querySelectorAll('.drop-into').forEach(el => el.classList.remove('drop-into'));
+  dropLine.style.display = 'none';
+}
+
+function showLine(row, after) {
+  const top = row.offsetTop + (after ? row.offsetHeight : 0);
+  const indented = !!row.closest('.folder-children');
+  dropLine.style.left = (indented ? 20 : 6) + 'px';
+  dropLine.style.top = (top - 1) + 'px';
+  dropLine.style.display = 'block';
+}
+
+function cancelExpandTimer() {
+  if (expandTimer) clearTimeout(expandTimer);
+  expandTimer = null;
+  expandTimerFor = null;
+}
+
+// Unhide without re-rendering — a re-render would destroy the drag source.
+function revealDuringDrag(folderId) {
+  const row = listEl.querySelector(`.folder-row[data-id="${CSS.escape(folderId)}"]`);
+  const kids = listEl.querySelector(`.folder-children[data-kids="${CSS.escape(folderId)}"]`);
+  if (!row || !kids || !kids.hidden) return;
+  tempExpanded.add(folderId);
+  kids.hidden = false;
+  row.classList.add('open');
+}
+
+listEl.addEventListener('dragstart', e => {
+  const row = e.target.closest('[data-row]');
+  if (!row || !canRearrange()) return;
+  const kind = row.dataset.kind;
+  if (kind !== 'snippet' && kind !== 'folder') return;
+
+  dragState = { active: true, kind, id: row.dataset.id, fromContainer: containerOf(row) };
+  // Chromium refuses to start a drag without payload, though every target
+  // decision reads dragState — getData() is unavailable during dragover.
+  e.dataTransfer.setData('text/plain', row.dataset.id);
+  e.dataTransfer.effectAllowed = 'move';
+  row.classList.add('drag-source');
+});
+
+listEl.addEventListener('dragover', e => {
+  if (!dragState.active) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+
+  // Auto-scroll near the edges of a short sidebar list.
+  const lb = listEl.getBoundingClientRect();
+  if (e.clientY - lb.top < 24) listEl.scrollTop -= 8;
+  else if (lb.bottom - e.clientY < 24) listEl.scrollTop += 8;
+
+  const row = e.target.closest('[data-row]');
+  clearDropVisuals();
+  dropTarget = null;
+
+  if (!row) return;
+  const kind = row.dataset.kind;
+  const rect = row.getBoundingClientRect();
+  const frac = (e.clientY - rect.top) / rect.height;
+
+  if (dragState.kind === 'folder') {
+    cancelExpandTimer();
+    // Flat tree: a folder can only be reordered among folders, never nested.
+    if (kind !== 'folder') return;
+    if (row.dataset.id === dragState.id) return;
+    const ids = domFolderIds().filter(id => id !== dragState.id);
+    const at = ids.indexOf(row.dataset.id);
+    const after = frac > 0.5;
+    dropTarget = { type: 'folder-at', index: after ? at + 1 : at };
+    showLine(row, after);
+    return;
+  }
+
+  if (kind === 'folder') {
+    // Whole row means "into this folder" — precise slots come from dropping on
+    // a child row, which is unambiguous.
+    dropTarget = { type: 'into', folderId: row.dataset.id };
+    row.classList.add('drop-into');
+    if (expandTimerFor !== row.dataset.id) {
+      cancelExpandTimer();
+      expandTimerFor = row.dataset.id;
+      expandTimer = setTimeout(() => revealDuringDrag(row.dataset.id), 600);
+    }
+    return;
+  }
+
+  cancelExpandTimer();
+
+  if (kind === 'snippet') {
+    if (row.dataset.id === dragState.id) return;
+    const container = containerOf(row);
+    const ids = domSnippetIds(container).filter(id => id !== dragState.id);
+    const at = ids.indexOf(row.dataset.id);
+    const after = frac > 0.5;
+    dropTarget = { type: 'snippet-at', container, index: after ? at + 1 : at };
+    showLine(row, after);
+  } else if (kind === 'empty-folder') {
+    dropTarget = { type: 'into', folderId: row.dataset.folder };
+    row.classList.add('drop-into');
+  } else if (kind === 'section' || kind === 'tail') {
+    // The Unorganized header and the tail zone both mean "out of any folder".
+    dropTarget = { type: 'snippet-at', container: null, index: kind === 'section' ? 0 : domSnippetIds(null).filter(id => id !== dragState.id).length };
+    row.classList.add('drop-into');
+  }
+});
+
+listEl.addEventListener('dragleave', e => {
+  if (e.target.closest('.folder-row') && expandTimerFor) cancelExpandTimer();
+});
+
+listEl.addEventListener('drop', async e => {
+  if (!dragState.active) return;
+  e.preventDefault();
+  const target = dropTarget;
+  const moved = dragState;
+  finishDrag();
+  if (!target) return;
+  await applyDrop(moved, target);
+});
+
+function finishDrag() {
+  cancelExpandTimer();
+  clearDropVisuals();
+  listEl.querySelectorAll('.drag-source').forEach(el => el.classList.remove('drag-source'));
+  dragState = { active: false };
+  dropTarget = null;
+  if (renderPending) { renderPending = false; renderList(); }
+}
+
+// A drag cancelled outside the window only fires dragend on the source.
+document.addEventListener('dragend', () => {
+  if (!dragState.active) return;
+  const hadTemp = tempExpanded.size > 0;
+  finishDrag();
+  if (hadTemp) { tempExpanded.clear(); renderList(); }
+});
+
+async function applyDrop(moved, target) {
+  if (moved.kind === 'folder') {
+    const ids = domFolderIds().filter(id => id !== moved.id);
+    ids.splice(Math.max(0, Math.min(target.index, ids.length)), 0, moved.id);
+    await ipcRenderer.invoke('apply-layout', {
+      folders: ids.map((id, i) => ({ id, order: i })),
+      snippets: [],
+    });
+  } else {
+    const container = target.type === 'into' ? target.folderId : target.container;
+    const ids = modelSnippetIds(container).filter(id => id !== moved.id);
+    // 'into' appends; a positional drop uses the index read off the DOM, which
+    // matches the model here because dragging requires an unfiltered manual view.
+    const index = target.type === 'into'
+      ? ids.length
+      : Math.max(0, Math.min(target.index, ids.length));
+    ids.splice(index, 0, moved.id);
+    // Send both containers: leaving the source out would keep a gap in its run.
+    const payload = ids.map((id, i) => ({ id, folderId: container, order: i }));
+    if (moved.fromContainer !== container) {
+      modelSnippetIds(moved.fromContainer)
+        .filter(id => id !== moved.id)
+        .forEach((id, i) => payload.push({ id, folderId: moved.fromContainer, order: i }));
+    }
+    await ipcRenderer.invoke('apply-layout', { folders: [], snippets: payload });
+  }
+
+  tempExpanded.clear();
+  snippets = await ipcRenderer.invoke('get-snippets');
+  folders = await ipcRenderer.invoke('get-folders');
+  renderList();
+}
+
+// ── Row context menu ──────────────────────────────────────────────────────────
+// The escape hatch that still works while a search or a non-manual sort has
+// disabled dragging.
+const FOLDER_COLORS = [
+  ['#7c6af7', 'Violet'], ['#4ade80', 'Green'], ['#f4a261', 'Amber'],
+  ['#5b9cf6', 'Blue'], ['#f87171', 'Red'], ['#c084fc', 'Orchid'],
+];
+
+function closeContextMenu() {
+  const m = document.getElementById('row-menu');
+  if (m) m.remove();
+}
+
+function openContextMenu(x, y, items) {
+  closeContextMenu();
+  const menu = document.createElement('div');
+  menu.id = 'row-menu';
+  menu.className = 'list-popup';
+  menu.innerHTML = items.map((it, i) => it === '-'
+    ? '<div class="popup-sep"></div>'
+    : `<div class="popup-item${it.danger ? ' danger' : ''}" data-i="${i}">
+         <span class="popup-check">${it.check ? CHECK : (it.swatch ? `<span class="swatch" style="background:${escAttr(it.swatch)}"></span>` : '')}</span>${escHtml(it.label)}
+       </div>`).join('');
+  document.body.appendChild(menu);
+  menu.style.position = 'fixed';
+  menu.style.left = Math.min(x, window.innerWidth - 200) + 'px';
+  menu.style.top = Math.min(y, window.innerHeight - menu.offsetHeight - 8) + 'px';
+  menu.addEventListener('click', e => {
+    const el = e.target.closest('.popup-item');
+    if (!el) return;
+    const it = items[Number(el.dataset.i)];
+    closeContextMenu();
+    if (it && it.run) it.run();
+  });
+}
+
+listEl.addEventListener('contextmenu', e => {
+  const row = e.target.closest('[data-row]');
+  if (!row) return;
+  e.preventDefault();
+
+  if (row.dataset.kind === 'snippet') {
+    const s = snippets.find(x => x.id === row.dataset.id);
+    if (!s) return;
+    const moves = [
+      { label: 'Unorganized', check: (s.folderId ?? null) === null, run: () => moveSnippetTo(s.id, null) },
+      ...sortFolders(folders).map(f => ({
+        label: f.name, check: s.folderId === f.id, run: () => moveSnippetTo(s.id, f.id),
+      })),
+    ];
+    openContextMenu(e.clientX, e.clientY, [
+      { label: 'Edit', run: () => selectSnippet(s.id) },
+      { label: 'Duplicate', run: () => duplicateSnippet(s.id) },
+      '-',
+      ...(folders.length ? [{ label: 'Move to…', run: () => openContextMenu(e.clientX, e.clientY, moves) }] : []),
+      '-',
+      { label: 'Delete snippet', danger: true, run: () => deleteSnippetById(s.id) },
+    ]);
+    return;
+  }
+
+  if (row.dataset.kind === 'folder') {
+    const f = folders.find(x => x.id === row.dataset.id);
+    if (!f) return;
+    const colors = [
+      { label: 'None', check: !f.color, run: () => setFolderColor(f.id, null) },
+      ...FOLDER_COLORS.map(([hex, name]) => ({
+        label: name, swatch: hex, check: f.color === hex, run: () => setFolderColor(f.id, hex),
+      })),
+    ];
+    openContextMenu(e.clientX, e.clientY, [
+      { label: 'Rename', run: () => beginRename(f.id) },
+      { label: 'Color…', run: () => openContextMenu(e.clientX, e.clientY, colors) },
+      { label: 'New snippet here', run: () => newSnippet(f.id) },
+      '-',
+      { label: 'Delete folder', danger: true, run: () => removeFolder(f.id) },
+    ]);
+  }
+});
+
+async function moveSnippetTo(id, folderId) {
+  const from = (snippets.find(x => x.id === id) || {}).folderId ?? null;
+  const ids = modelSnippetIds(folderId).filter(x => x !== id);
+  ids.push(id);
+  const payload = ids.map((x, i) => ({ id: x, folderId, order: i }));
+  if (from !== folderId) {
+    modelSnippetIds(from).filter(x => x !== id)
+      .forEach((x, i) => payload.push({ id: x, folderId: from, order: i }));
+  }
+  await ipcRenderer.invoke('apply-layout', { folders: [], snippets: payload });
+  snippets = await ipcRenderer.invoke('get-snippets');
+  renderList();
+  toast(folderId ? `Moved to ${(folders.find(f => f.id === folderId) || {}).name}` : 'Moved to Unorganized');
+}
+
+async function setFolderColor(id, color) {
+  await ipcRenderer.invoke('set-folder-color', id, color);
+  folders = await ipcRenderer.invoke('get-folders');
+  renderList();
+}
+
+async function duplicateSnippet(id) {
+  const s = snippets.find(x => x.id === id);
+  if (!s) return;
+  let shortcut = s.shortcut + '2';
+  let n = 2;
+  while (snippets.some(x => x.shortcut === shortcut)) shortcut = s.shortcut + ++n;
+  await ipcRenderer.invoke('save-snippet', {
+    id: Date.now().toString(),
+    name: s.name + ' copy',
+    shortcut,
+    subject: s.subject || '',
+    html: s.html,
+    folderId: s.folderId ?? null,
+    createdAt: new Date().toISOString(),
+  });
+  snippets = await ipcRenderer.invoke('get-snippets');
+  renderList();
+  toast('Duplicated');
+}
+
+async function deleteSnippetById(id) {
+  const s = snippets.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm(`Delete "${s.name}"?`)) return;
+  await ipcRenderer.invoke('delete-snippet', id);
+  snippets = await ipcRenderer.invoke('get-snippets');
+  if (currentId === id) cancelEdit();
+  else renderList();
+  toast('Deleted');
+}
+
+// ── Sidebar resize ────────────────────────────────────────────────────────────
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 420;
+
+function applySidebarWidth() {
+  const w = Math.max(SIDEBAR_MIN, Math.min(prefs.sidebarWidth || 240, SIDEBAR_MAX));
+  const bar = document.getElementById('sidebar');
+  bar.style.width = w + 'px';
+  bar.style.minWidth = w + 'px';
+}
+
+(function initSidebarResize() {
+  const handle = document.getElementById('sidebar-resize');
+  if (!handle) return;
+  let startX = 0, startW = 240;
+
+  const onMove = e => {
+    const w = Math.max(SIDEBAR_MIN, Math.min(startW + (e.clientX - startX), SIDEBAR_MAX));
+    const bar = document.getElementById('sidebar');
+    bar.style.width = w + 'px';
+    bar.style.minWidth = w + 'px';
+  };
+  const onUp = async () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.classList.remove('resizing');
+    const w = parseInt(document.getElementById('sidebar').style.width, 10);
+    if (Number.isFinite(w) && w !== prefs.sidebarWidth) {
+      prefs.sidebarWidth = w;
+      await ipcRenderer.invoke('save-prefs', { sidebarWidth: w });
+    }
+  };
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX;
+    startW = document.getElementById('sidebar').offsetWidth;
+    document.body.classList.add('resizing');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+// Sorting is a view transform: it never rewrites the stored order, so switching
+// back to Manual restores whatever arrangement was built by hand.
+const SORT_OPTIONS = [
+  ['Snippets', 'snippetSort', [
+    ['manual', 'Manual'],
+    ['name', 'Name A–Z'],
+    ['created', 'Date created'],
+    ['uses', 'Most used'],
+  ]],
+  ['Folders', 'folderSort', [
+    ['manual', 'Manual'],
+    ['name', 'Name A–Z'],
+    ['created', 'Date created'],
+    ['count', 'Snippet count'],
+    ['uses', 'Total uses'],
+  ]],
+];
+
+const CHECK = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M2 6.4 L4.6 9 L10 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function renderSortPopup() {
+  const pop = document.getElementById('sort-popup');
+  pop.innerHTML = SORT_OPTIONS.map(([title, key, opts]) =>
+    `<div class="popup-group">${title}</div>` +
+    opts.map(([val, label]) => {
+      const on = (prefs[key] || UNSORTED) === val;
+      return `<div class="popup-item" data-key="${key}" data-val="${val}">
+        <span class="popup-check">${on ? CHECK : ''}</span>${label}
+      </div>`;
+    }).join('')
+  ).join('');
+}
+
+function sortLabel() {
+  const sn = prefs.snippetSort || UNSORTED;
+  const fo = prefs.folderSort || UNSORTED;
+  const short = { manual: 'manual', name: 'A–Z', created: 'date', uses: 'uses', count: 'count' };
+  return sn === UNSORTED && fo === UNSORTED ? 'manual' : `${short[sn]} / ${short[fo]}`;
+}
+
+function updateSortUi() {
+  const custom = (prefs.snippetSort || UNSORTED) !== UNSORTED || (prefs.folderSort || UNSORTED) !== UNSORTED;
+  document.getElementById('sort-btn').classList.toggle('on', custom);
+  document.getElementById('sort-label').textContent = sortLabel();
+}
+
+function closePopups() {
+  document.getElementById('sort-popup').hidden = true;
+  document.getElementById('sort-btn').classList.remove('open');
+  closeContextMenu();
+}
+
+document.getElementById('sort-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  const pop = document.getElementById('sort-popup');
+  const show = pop.hidden;
+  closePopups();
+  if (show) { renderSortPopup(); pop.hidden = false; }
+});
+
+document.getElementById('sort-popup').addEventListener('click', async e => {
+  const item = e.target.closest('.popup-item');
+  if (!item) return;
+  prefs[item.dataset.key] = item.dataset.val;
+  await ipcRenderer.invoke('save-prefs', { [item.dataset.key]: item.dataset.val });
+  renderSortPopup();
+  updateSortUi();
+  renderList();
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#sort-btn, #sort-popup, #row-menu')) closePopups();
+});
+
+// ── Toolbar ───────────────────────────────────────────────────────────────────
+document.getElementById('new-folder-btn').addEventListener('click', newFolder);
+
+document.getElementById('expand-all-btn').addEventListener('click', () => {
+  expandAll(!allExpanded());
+  updateExpandAllUi();
+});
+
+function updateExpandAllUi() {
+  const btn = document.getElementById('expand-all-btn');
+  const open = allExpanded();
+  btn.title = open ? 'Collapse all' : 'Expand all';
+  btn.style.transform = open ? 'rotate(180deg)' : '';
+  btn.disabled = folders.length === 0;
+  btn.style.opacity = folders.length === 0 ? '0.35' : '';
+}
+
 // ── Events ────────────────────────────────────────────────────────────────────
 document.getElementById('new-btn').addEventListener('click', newSnippet);
 document.getElementById('save-btn').addEventListener('click', saveSnippet);
 document.getElementById('delete-btn').addEventListener('click', deleteSnippet);
 document.getElementById('cancel-btn').addEventListener('click', cancelEdit);
 document.getElementById('field-shortcut').addEventListener('input', updateShortcutHint);
+document.getElementById('field-folder').addEventListener('change', e => {
+  editorFolderId = e.target.value || null;
+  if (isNew) newFolderId = editorFolderId;
+});
 document.getElementById('search-input').addEventListener('input', e => {
   filterText = e.target.value;
   kbIdx = 0;
@@ -1572,6 +2695,16 @@ document.getElementById('search-input').addEventListener('input', e => {
 });
 
 document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    // Expand/collapse the folder holding the keyboard selection.
+    const s = filtered[kbIdx];
+    if (!s || !s.folderId) return;
+    const f = folders.find(x => x.id === s.folderId);
+    if (!f) return;
+    e.preventDefault();
+    setFolderCollapsed(f, e.key === 'ArrowLeft');
+    return;
+  }
   if (e.key === 'ArrowDown') {
     e.preventDefault();
     kbIdx = Math.min(kbIdx + 1, filtered.length - 1);
@@ -1599,6 +2732,14 @@ ipcRenderer.on('focus-search', () => {
   kbIdx = 0;
   renderList();
   input.focus();
+});
+
+// Cmd+Shift+N — new folder
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'n' || e.key === 'N')) {
+    e.preventDefault();
+    newFolder();
+  }
 });
 
 // Cmd+S to save
