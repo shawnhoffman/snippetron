@@ -443,13 +443,18 @@ function createManagerWindow(focusSearch = false) {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
+      // A hidden window is background-throttled, which stalls renderer timers
+      // that automated runs depend on.
+      backgroundThrottling: !(isDev && process.env.SNIPPETRON_HEADLESS),
     },
     show: false,
   });
 
   managerWindow.loadFile(path.join(__dirname, '../renderer/manager.html'));
   managerWindow.once('ready-to-show', () => {
-    managerWindow.show();
+    // SNIPPETRON_HEADLESS keeps the window off-screen for automated runs;
+    // capturePage() still renders it.
+    if (!(isDev && process.env.SNIPPETRON_HEADLESS)) managerWindow.show();
     if (focusSearch) managerWindow.webContents.send('focus-search');
   });
   managerWindow.on('closed', () => { managerWindow = null; });

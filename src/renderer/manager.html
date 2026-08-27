@@ -979,6 +979,8 @@
     transition: border-color 0.15s;
   }
   #link-dialog input:focus { border-color: var(--accent); }
+  #link-dialog label.stacked { margin-top: 10px; }
+  #link-dialog #link-text-input { font-family: 'DM Sans', sans-serif; }
   #link-dialog .dialog-actions {
     display: flex;
     gap: 6px;
@@ -1201,7 +1203,9 @@
 
 <div id="link-dialog-overlay"></div>
 <div id="link-dialog" style="display:none">
-  <label>URL</label>
+  <label>Text</label>
+  <input type="text" id="link-text-input" placeholder="Link text">
+  <label class="stacked">URL</label>
   <input type="text" id="link-url-input" placeholder="https://example.com">
   <div class="dialog-actions">
     <button class="btn-unlink" id="link-unlink-btn" style="display:none">Remove link</button>
@@ -1651,47 +1655,85 @@ document.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
 });
 
 let savedRange = null;
+let editingAnchor = null;   // the <a> being edited, if the selection sits in one
+
+// Walk up from the selection to an <a> inside the editor. Handles a collapsed
+// caret inside a link, a partial selection within one, and a selection that
+// wraps exactly one whole link.
+function anchorAtSelection() {
+  const editor = document.getElementById('editor');
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+
+  for (const start of [sel.anchorNode, sel.focusNode, range.commonAncestorContainer]) {
+    let n = start;
+    while (n && n !== editor) {
+      if (n.nodeType === 1 && n.tagName === 'A') return n;
+      n = n.parentNode;
+    }
+  }
+
+  const selText = range.toString();
+  const touched = [...editor.querySelectorAll('a')].filter(a => {
+    try { return range.intersectsNode(a); } catch { return false; }
+  });
+  return touched.length === 1 && touched[0].textContent === selText ? touched[0] : null;
+}
+
+// Bare domains get https://; an email-looking value gets mailto:. Anything that
+// already carries a scheme, or is anchor/root/protocol-relative, is left alone.
+function normalizeUrl(v) {
+  if (/^([a-z][a-z0-9+.\-]*:|\/\/|#|\/)/i.test(v)) return v;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'mailto:' + v;
+  return 'https://' + v;
+}
 
 function showLinkDialog() {
-  const editor = document.getElementById('editor');
-  // Save selection so we can restore it after the input steals focus
   const sel = window.getSelection();
   if (sel && sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
+  editingAnchor = anchorAtSelection();
 
-  // Check if cursor is inside an existing link
-  const anchor = sel && sel.anchorNode && sel.anchorNode.closest && sel.anchorNode.closest('a')
-    || (sel && sel.anchorNode && sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest('a'));
-  const existingUrl = anchor ? anchor.href : '';
+  const textInput = document.getElementById('link-text-input');
+  const urlInput = document.getElementById('link-url-input');
 
-  const input = document.getElementById('link-url-input');
-  input.value = existingUrl || '';
+  if (editingAnchor) {
+    textInput.value = editingAnchor.textContent;
+    urlInput.value = editingAnchor.getAttribute('href') || '';
+  } else {
+    textInput.value = savedRange ? savedRange.toString() : '';
+    urlInput.value = '';
+  }
 
-  const unlinkBtn = document.getElementById('link-unlink-btn');
-  unlinkBtn.style.display = existingUrl ? 'inline-block' : 'none';
+  document.getElementById('link-unlink-btn').style.display = editingAnchor ? 'inline-block' : 'none';
 
-  // Position dialog near the toolbar
   const btn = document.getElementById('insert-link-btn');
   const rect = btn.getBoundingClientRect();
   const dialog = document.getElementById('link-dialog');
   dialog.style.display = 'block';
-  dialog.style.top = (rect.bottom + 6) + 'px';
-  dialog.style.left = Math.min(rect.left, window.innerWidth - 316) + 'px';
-
+  dialog.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 316)) + 'px';
+  // Two fields make this tall enough to fall off the bottom, so flip above the
+  // button when there isn't room below, and clamp either way.
+  const h = dialog.offsetHeight;
+  let top = rect.bottom + 6;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+  dialog.style.top = top + 'px';
   document.getElementById('link-dialog-overlay').style.display = 'block';
-  setTimeout(() => input.focus(), 0);
+
+  // Land on whichever field the user is most likely to be changing.
+  const focusEl = (editingAnchor || textInput.value) ? urlInput : textInput;
+  setTimeout(() => { focusEl.focus(); focusEl.select(); }, 0);
 }
 
 function hideLinkDialog() {
   document.getElementById('link-dialog').style.display = 'none';
   document.getElementById('link-dialog-overlay').style.display = 'none';
+  editingAnchor = null;
 }
 
-function applyLink() {
-  const rawUrl = document.getElementById('link-url-input').value.trim();
-  if (!rawUrl) { hideLinkDialog(); return; }
-  const url = rawUrl.startsWith('http') ? rawUrl : 'https://' + rawUrl;
-
-  // Restore selection in editor
+// Put the caret back where it was, so dismissing the dialog doesn't lose the spot.
+function cancelLinkDialog() {
+  hideLinkDialog();
   const editor = document.getElementById('editor');
   editor.focus();
   if (savedRange) {
@@ -1699,8 +1741,102 @@ function applyLink() {
     sel.removeAllRanges();
     sel.addRange(savedRange);
   }
-  document.execCommand('createLink', false, url);
+}
+
+function placeCaretAfter(node) {
+  const range = document.createRange();
+  range.setStartAfter(node);
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// Replace the current selection with `html`, then leave the caret just after it
+// (outside any inserted link, so typing doesn't extend the link).
+function insertAndExitLink(html) {
+  const editor = document.getElementById('editor');
+  document.execCommand('insertHTML', false, html + '<span id="__linkcaret"></span>');
+  const marker = editor.querySelector('#__linkcaret');
+  if (!marker) return;
+  const parent = marker.parentNode;
+  const idx = [...parent.childNodes].indexOf(marker);
+  marker.remove();
+  const range = document.createRange();
+  range.setStart(parent, idx);
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function applyLink() {
+  const text = document.getElementById('link-text-input').value.trim();
+  const rawUrl = document.getElementById('link-url-input').value.trim();
+  if (!rawUrl) { cancelLinkDialog(); return; }
+
+  const url = normalizeUrl(rawUrl);
+  const label = text || url;
+  const editor = document.getElementById('editor');
+  editor.focus();
+
+  // Editing an existing link: change it in place. Replacing the node through
+  // execCommand instead would rewrite the whitespace around it as &nbsp;.
+  if (editingAnchor && editor.contains(editingAnchor)) {
+    editingAnchor.setAttribute('href', url);
+    if (editingAnchor.textContent !== label) editingAnchor.textContent = label;
+    placeCaretAfter(editingAnchor);
+    hideLinkDialog();
+    updateToolbarState();
+    return;
+  }
+
+  const sel = window.getSelection();
+  if (savedRange) {
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  }
+
+  if (savedRange && !savedRange.collapsed && savedRange.toString() === label) {
+    // Linking the selected text unchanged — wrap it in place, same reason.
+    document.execCommand('createLink', false, url);
+  } else {
+    insertAndExitLink(`<a href="${escAttr(url)}">${escHtml(label)}</a>`);
+  }
+
   hideLinkDialog();
+  updateToolbarState();
+}
+
+function removeLink() {
+  const editor = document.getElementById('editor');
+  editor.focus();
+
+  if (editingAnchor && editor.contains(editingAnchor)) {
+    const label = document.createTextNode(editingAnchor.textContent);
+    editingAnchor.replaceWith(label);
+    placeCaretAfter(label);
+  } else {
+    // No specific anchor resolved — expand over the one under the caret, then unlink.
+    const sel = window.getSelection();
+    if (savedRange) { sel.removeAllRanges(); sel.addRange(savedRange); }
+    if (sel && sel.isCollapsed && sel.anchorNode) {
+      const node = sel.anchorNode;
+      const a = node.nodeType === 1
+        ? node.closest('a')
+        : node.parentElement && node.parentElement.closest('a');
+      if (a) {
+        const range = document.createRange();
+        range.selectNodeContents(a);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+    document.execCommand('unlink', false, null);
+  }
+
+  hideLinkDialog();
+  updateToolbarState();
 }
 
 document.getElementById('insert-link-btn').addEventListener('mousedown', e => {
@@ -1709,39 +1845,31 @@ document.getElementById('insert-link-btn').addEventListener('mousedown', e => {
 });
 
 document.getElementById('link-ok-btn').addEventListener('click', applyLink);
+document.getElementById('link-cancel-btn').addEventListener('click', cancelLinkDialog);
+document.getElementById('link-dialog-overlay').addEventListener('click', cancelLinkDialog);
+document.getElementById('link-unlink-btn').addEventListener('click', removeLink);
 
-document.getElementById('link-url-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') applyLink();
-  if (e.key === 'Escape') hideLinkDialog();
+// Enter applies, Escape cancels — from either field. preventDefault matters:
+// applyLink moves focus into the editor, so an unhandled Enter would land there
+// as a newline, which is what it used to do.
+document.getElementById('link-dialog').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.stopPropagation();
+    applyLink();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    cancelLinkDialog();
+  }
 });
 
-document.getElementById('link-cancel-btn').addEventListener('click', hideLinkDialog);
-
-document.getElementById('link-dialog-overlay').addEventListener('click', hideLinkDialog);
-
-document.getElementById('link-unlink-btn').addEventListener('click', () => {
-  const editor = document.getElementById('editor');
-  editor.focus();
-  if (savedRange) {
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(savedRange);
+// Cmd/Ctrl+K on the editor opens the same dialog.
+document.getElementById('editor').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    showLinkDialog();
   }
-  // Expand selection to cover the whole link if nothing is selected
-  const sel = window.getSelection();
-  if (sel && sel.isCollapsed && sel.anchorNode) {
-    const anchor = sel.anchorNode.closest
-      ? sel.anchorNode.closest('a')
-      : sel.anchorNode.parentElement && sel.anchorNode.parentElement.closest('a');
-    if (anchor) {
-      const range = document.createRange();
-      range.selectNodeContents(anchor);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }
-  document.execCommand('unlink', false, null);
-  hideLinkDialog();
 });
 
 // ── Merge field dialog ────────────────────────────────────────────────────────
@@ -1758,8 +1886,11 @@ function showMergeDialog() {
   const rect = btn.getBoundingClientRect();
   const dialog = document.getElementById('merge-dialog');
   dialog.style.display = 'block';
-  dialog.style.top = (rect.bottom + 6) + 'px';
-  dialog.style.left = Math.min(rect.left, window.innerWidth - 296) + 'px';
+  dialog.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 296)) + 'px';
+  const mh = dialog.offsetHeight;
+  let mtop = rect.bottom + 6;
+  if (mtop + mh > window.innerHeight - 8) mtop = Math.max(8, rect.top - mh - 6);
+  dialog.style.top = mtop + 'px';
 
   document.getElementById('link-dialog-overlay').style.display = 'block';
   setTimeout(() => input.focus(), 0);
@@ -1795,8 +1926,15 @@ document.getElementById('merge-ok-btn').addEventListener('click', applyMergeFiel
 document.getElementById('merge-cancel-btn').addEventListener('click', hideMergeDialog);
 
 document.getElementById('merge-field-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') applyMergeField();
-  if (e.key === 'Escape') hideMergeDialog();
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.stopPropagation();
+    applyMergeField();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    hideMergeDialog();
+  }
 });
 
 // ── Paste cleanup ─────────────────────────────────────────────────────────────
