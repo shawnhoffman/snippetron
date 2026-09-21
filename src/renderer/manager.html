@@ -772,6 +772,17 @@
 
   #editor a { color: #5b9cf6; text-decoration: underline; }
 
+  /* Emoji arrive from Gmail as 72px PNGs. normalizeEmojiHtml turns the ones it
+     recognises into characters; this keeps any it doesn't inline-sized, and
+     stops a genuine image from overflowing the editor. */
+  #editor img { max-width: 100%; height: auto; }
+  #editor img[src*="/notoemoji/"],
+  #editor img[src*="emoji"] {
+    height: 1.2em;
+    width: auto;
+    vertical-align: -0.2em;
+  }
+
   #editor ul, #editor ol { padding-left: 20px; }
 
   #editor blockquote {
@@ -1226,6 +1237,7 @@
 
 <script>
 const { ipcRenderer } = require('electron');
+const { normalizeEmojiHtml } = require('../shared/emoji');
 
 let snippets = [];
 let prefs = {};
@@ -1239,7 +1251,6 @@ let kbIdx = 0;
 // A trackUsage broadcast can land mid-drag; re-rendering then would yank the
 // drag source out of the DOM. Defer instead and flush on dragend.
 let dragState = { active: false };
-let newFolderId = null;        // folder a brand-new snippet should be saved into
 let currentIdBeforeNew = null; // selection at the moment "+ New Snippet" was hit
 let renderPending = false;
 
@@ -1488,15 +1499,12 @@ function selectSnippet(id) {
   }
 }
 
-let editorFolderId;   // undefined = picker untouched, so leave folderId alone
-
 function renderFolderPicker(selected) {
   const sel = document.getElementById('field-folder');
   sel.innerHTML = `<option value="">Unorganized</option>` +
     sortFolders(folders).map(f =>
       `<option value="${escAttr(f.id)}">${escHtml(f.name)}</option>`).join('');
   sel.value = selected ?? '';
-  editorFolderId = selected ?? null;
 }
 
 function populateForm(s) {
@@ -1506,7 +1514,7 @@ function populateForm(s) {
   document.getElementById('field-name').value = s.name || '';
   document.getElementById('field-shortcut').value = s.shortcut || '';
   document.getElementById('field-subject').value = s.subject || '';
-  document.getElementById('editor').innerHTML = s.html || '';
+  document.getElementById('editor').innerHTML = normalizeEmojiHtml(s.html || '');
   renderFolderPicker(s.folderId ?? null);
   document.getElementById('snippet-meta').textContent =
     s.createdAt ? `Created ${new Date(s.createdAt).toLocaleDateString()}` : '';
@@ -1523,7 +1531,6 @@ function newSnippet(folderId) {
     ? folderId
     : (snippets.find(x => x.id === currentIdBeforeNew) || {}).folderId ?? null;
   const blank = { id: currentId, name: '', shortcut: '', subject: '', html: '', folderId: inherited, createdAt: new Date().toISOString() };
-  newFolderId = inherited;
   populateForm(blank);
   renderList();
   document.getElementById('field-name').focus();
@@ -1534,7 +1541,9 @@ async function saveSnippet() {
   const name = document.getElementById('field-name').value.trim();
   const shortcut = document.getElementById('field-shortcut').value.trim().replace(/\s/g, '');
   const subject = document.getElementById('field-subject').value.trim();
-  const html = document.getElementById('editor').innerHTML;
+  // Normalise here too, not just on paste: this is the one place every route
+  // into storage passes through.
+  const html = normalizeEmojiHtml(document.getElementById('editor').innerHTML);
 
   if (!name) { toast('Please add a name', 'error'); return; }
   if (!shortcut) { toast('Please add a shortcut', 'error'); return; }
@@ -1544,20 +1553,39 @@ async function saveSnippet() {
   if (dup) { toast(`"${shortcut}" is already used by "${dup.name}"`, 'error'); return; }
 
   const snippet = { id: isNew ? Date.now().toString() : currentId, name, shortcut, subject, html, createdAt: isNew ? new Date().toISOString() : undefined };
-  if (isNew) snippet.folderId = newFolderId ?? null;
-  else if (editorFolderId !== undefined) snippet.folderId = editorFolderId;
+  // The picker is the single source of truth, and an unset picker means
+  // Unorganized. Folder is never required and never blocks a save.
+  snippet.folderId = selectedFolderId();
   if (!isNew) {
     const existing = snippets.find(s => s.id === currentId);
     if (existing) snippet.createdAt = existing.createdAt;
   }
 
-  await ipcRenderer.invoke('save-snippet', snippet);
-  snippets = await ipcRenderer.invoke('get-snippets');
+  try {
+    await ipcRenderer.invoke('save-snippet', snippet);
+    snippets = await ipcRenderer.invoke('get-snippets');
+    folders = await ipcRenderer.invoke('get-folders');
+  } catch (err) {
+    // Never fail silently — an unhandled rejection here used to leave the user
+    // staring at an unsaved snippet with no explanation.
+    console.error('save-snippet failed', err);
+    toast('Could not save: ' + (err && err.message ? err.message : err), 'error');
+    return;
+  }
+
   currentId = snippet.id;
   isNew = false;
-  newFolderId = null;
   renderList();
   toast('Saved!', 'success');
+}
+
+// Reads the folder <select>, falling back to Unorganized if it is missing or
+// points at a folder that no longer exists.
+function selectedFolderId() {
+  const sel = document.getElementById('field-folder');
+  const raw = sel ? sel.value : '';
+  if (!raw) return null;
+  return folders.some(f => f.id === raw) ? raw : null;
 }
 
 async function deleteSnippet() {
@@ -1943,7 +1971,7 @@ document.getElementById('editor').addEventListener('paste', e => {
   const html = e.clipboardData.getData('text/html');
   if (html) {
     const tmp = document.createElement('div');
-    tmp.innerHTML = html;
+    tmp.innerHTML = normalizeEmojiHtml(html);
     tmp.querySelectorAll('style, script, meta, link').forEach(el => el.remove());
     tmp.querySelectorAll('*').forEach(el => {
       el.removeAttribute('style');
@@ -2822,10 +2850,13 @@ document.getElementById('save-btn').addEventListener('click', saveSnippet);
 document.getElementById('delete-btn').addEventListener('click', deleteSnippet);
 document.getElementById('cancel-btn').addEventListener('click', cancelEdit);
 document.getElementById('field-shortcut').addEventListener('input', updateShortcutHint);
-document.getElementById('field-folder').addEventListener('change', e => {
-  editorFolderId = e.target.value || null;
-  if (isNew) newFolderId = editorFolderId;
+
+['field-name', 'field-shortcut', 'field-subject'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveSnippet(); }
+  });
 });
+
 document.getElementById('search-input').addEventListener('input', e => {
   filterText = e.target.value;
   kbIdx = 0;

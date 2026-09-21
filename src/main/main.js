@@ -2,6 +2,7 @@ const { app, BrowserWindow, Tray, Menu, clipboard, ipcMain, nativeImage, globalS
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { normalizeEmojiHtml } = require('../shared/emoji');
 
 // ─── Dev: hot-reload renderer on file changes ─────────────────────────────────
 const isDev = process.argv.includes('--dev');
@@ -189,6 +190,7 @@ let uiohook = null;
 function writeRichClipboard(html, plainText) {
   // Write HTML for web apps, RTF for desktop apps
   // Electron's clipboard supports both simultaneously
+  html = normalizeEmojiHtml(html);
   const rtf = htmlToRtf(html);
   clipboard.write({
     text: plainText,
