@@ -7,6 +7,9 @@
 //   SNIPPETRON_SHOT      directory to write capturePage() PNGs into
 //   SNIPPETRON_SCRIPT    path to a JS file evaluated in the manager renderer
 //   SNIPPETRON_EXIT      quit after the script + captures finish
+//   SNIPPETRON_RESULT    write the script's return value to this path as JSON,
+//                        so a runner can read it without scraping stdout
+//   SNIPPETRON_HEADLESS  never show the window (see main.js)
 //
 // Each SNIPPETRON_SCRIPT file exports a sequence by simply being an async IIFE
 // whose resolved value is logged. Between steps it may call
@@ -28,9 +31,24 @@ function install({ app, getWindow }) {
     console.log(`[harness] shot ${file}`);
   }
 
+  function writeResult(value) {
+    const out = process.env.SNIPPETRON_RESULT;
+    if (!out) return;
+    try {
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, JSON.stringify(value ?? null, null, 2));
+    } catch (e) {
+      console.log('[harness] could not write result: ' + e);
+    }
+  }
+
   async function run() {
     const win = getWindow();
-    if (!win) { console.log('[harness] no manager window'); return; }
+    if (!win) {
+      console.log('[harness] no manager window');
+      writeResult({ __error: 'no manager window' });
+      return;
+    }
     await new Promise(r => setTimeout(r, 900)); // let fonts + first paint settle
 
     // Expose a capture hook the renderer script can await.
@@ -49,8 +67,11 @@ function install({ app, getWindow }) {
           true
         );
         console.log('[harness] result ' + JSON.stringify(result, null, 2));
+        writeResult(result);
       } catch (e) {
-        console.log('[harness] script threw ' + (e && e.stack || e));
+        const err = { __error: String((e && e.stack) || e) };
+        console.log('[harness] script threw ' + err.__error);
+        writeResult(err);
       }
     } else {
       await capture(win, 'default');
@@ -72,6 +93,7 @@ function install({ app, getWindow }) {
     if (waited > 15000) {
       clearInterval(iv);
       console.log('[harness] timed out waiting for the manager window');
+      writeResult({ __error: 'timed out waiting for the manager window' });
       app.exit(1);
     }
   }, 250);
